@@ -1,0 +1,23 @@
+{
+  "name": "ai-bos",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "frontend:dev": "npm --prefix frontend run dev",
+    "frontend:dev:server": "npm --prefix frontend run dev:server",
+    "frontend:build": "npm --prefix frontend run build",
+    "frontend:preview": "npm --prefix frontend run preview",
+    "frontend:lint": "npm --prefix frontend run lint",
+    "backend:dev": "npm --prefix backend run dev",
+    "backend:build": "npm --prefix backend run build",
+    "backend:start": "npm --prefix backend start",
+    "backend:typecheck": "npm --prefix backend run typecheck",
+    "backend:seed": "npm --prefix backend run seed",
+    "ai:dev": "cd ai-service && uvicorn app.main:app --reload --host 127.0.0.1 --port 8000",
+    "ai:test": "cd ai-service && pytest",
+    "lint": "npm run frontend:lint",
+    "build": "npm run frontend:build && npm run backend:build",
+    "dev": "npm run frontend:dev"
+  }
+}

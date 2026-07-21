@@ -1,0 +1,1 @@
+export { BusinessIntelligencePage } from "./BusinessIntelligencePage";

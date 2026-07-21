@@ -1,0 +1,66 @@
+import type { MemoryItem, MemoryStats } from "./memory.types";
+
+export const seedMemoryItems: MemoryItem[] = [
+  {
+    id: "mem-1",
+    type: "fact",
+    title: "Company Revenue Q3",
+    content: "Q3 2026 revenue reached $267K, representing a 29.6% increase from Q2.",
+    tags: ["finance", "quarterly", "revenue"],
+    source: "Finance Module",
+    createdAt: "2026-07-15T10:00:00Z",
+    updatedAt: "2026-07-15T10:00:00Z",
+    metadata: { quarter: "Q3", year: 2026, amount: 267000 },
+  },
+  {
+    id: "mem-2",
+    type: "preference",
+    title: "User Notification Preference",
+    content: "User prefers email notifications for project milestones and Slack for team updates.",
+    tags: ["notifications", "preferences", "user"],
+    source: "Settings Module",
+    createdAt: "2026-07-10T08:00:00Z",
+    updatedAt: "2026-07-18T14:30:00Z",
+    metadata: { email: true, slack: true, push: false },
+  },
+  {
+    id: "mem-3",
+    type: "context",
+    title: "AI Sales Copilot Project Context",
+    content: "Focus on CRM integration and executive summary prompts. Deadline is August 12, 2026.",
+    tags: ["projects", "ai", "crm"],
+    source: "Projects Module",
+    createdAt: "2026-07-01T09:00:00Z",
+    updatedAt: "2026-07-18T16:00:00Z",
+    metadata: { projectId: "p-1", deadline: "2026-08-12" },
+  },
+  {
+    id: "mem-4",
+    type: "conversation",
+    title: "CEO Strategy Discussion",
+    content: "Discussed expanding into APAC markets. Prioritize Japan and Singapore for Q4 2026.",
+    tags: ["strategy", "expansion", "apac"],
+    source: "Multi-Agent AI",
+    createdAt: "2026-07-20T15:00:00Z",
+    updatedAt: "2026-07-20T15:00:00Z",
+    metadata: { agentId: "ceo", participants: ["CEO", "Strategy Team"] },
+  },
+  {
+    id: "mem-5",
+    type: "document",
+    title: "Employee Onboarding Policy",
+    content: "Standard onboarding includes equipment assignment, training schedule, and welcome notifications.",
+    tags: ["hr", "onboarding", "policy"],
+    source: "Documents Module",
+    createdAt: "2026-07-12T11:00:00Z",
+    updatedAt: "2026-07-12T11:00:00Z",
+    metadata: { documentId: "doc-45", version: "1.2" },
+  },
+];
+
+export const seedMemoryStats: MemoryStats = {
+  totalItems: 1247,
+  totalTypes: { note: 342, fact: 189, context: 456, preference: 78, document: 123, conversation: 59 },
+  lastUpdated: "2026-07-21T10:00:00Z",
+  storageUsed: "24.5 MB",
+};
