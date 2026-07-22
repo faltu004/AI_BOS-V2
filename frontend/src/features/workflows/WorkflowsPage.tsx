@@ -11,34 +11,23 @@ import {
   Download,
   Edit3,
   Eye,
-  FileText,
-  Filter,
   FolderKanban,
   GitBranch,
-  Globe,
-  Grid3X3,
   GripVertical,
   LayoutList,
-  LifeBuoy,
   MessageSquareText,
   MoreVertical,
   Pause,
   Play,
   Plus,
-  ReceiptText,
   Search,
   Settings2,
   ShieldCheck,
-  Sparkles,
-  SquarePen,
-  Trash2,
   TrendingUp,
-  UserPlus,
-  UsersRound,
-  WalletCards,
+  Trash2,
   Zap,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { Button } from "@/components/ui/button";
@@ -46,20 +35,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { useConfirm } from "@/components/ui/confirm-dialog-context";
 import { useToast } from "@/components/ui/toast-context";
 import {
   seedWorkflows,
   workflowActionTypes,
-  workflowConditionOperators,
   workflowStatuses,
-  workflowStepTypes,
   workflowTriggerTypes,
 } from "./workflows.data";
 import {
   createWorkflowFromInput,
-  generateWorkflowId,
   getStepColor,
   getStepIcon,
   getStepStatusColor,
