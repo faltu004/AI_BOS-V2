@@ -1,0 +1,1 @@
+export { CollaborationHubPage } from "./CollaborationHubPage";

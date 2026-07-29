@@ -1,20 +1,12 @@
 import type { RequestHandler } from "express";
 import { refreshTokenCookieName } from "../constants/auth.js";
 import { authService } from "../services/auth.service.js";
+import { passwordService } from "../services/password.service.js";
 import { sendSuccess } from "../utils/api-response.js";
+import { AppError } from "../utils/app-error.js";
 import { clearRefreshTokenCookie, setRefreshTokenCookie } from "../utils/cookies.js";
 
 export class AuthController {
-  register: RequestHandler = async (req, res) => {
-    const result = await authService.register(req.body);
-    setRefreshTokenCookie(res, result.tokens.refreshToken);
-
-    sendSuccess(res, 201, {
-      message: "User registered successfully",
-      data: result,
-    });
-  };
-
   login: RequestHandler = async (req, res) => {
     const result = await authService.login(req.body);
     setRefreshTokenCookie(res, result.tokens.refreshToken);
@@ -26,8 +18,15 @@ export class AuthController {
   };
 
   refresh: RequestHandler = async (req, res) => {
+    const refreshTokenFromBody = req.body.refreshToken;
+    const refreshTokenFromCookie = req.cookies[refreshTokenCookieName];
+
+    if (!refreshTokenFromBody && refreshTokenFromCookie && req.header("x-csrf-token") !== "refresh-token") {
+      throw new AppError("CSRF validation failed", 403);
+    }
+
     const result = await authService.refresh({
-      refreshToken: req.body.refreshToken ?? req.cookies[refreshTokenCookieName],
+      refreshToken: refreshTokenFromBody ?? refreshTokenFromCookie,
     });
     setRefreshTokenCookie(res, result.tokens.refreshToken);
 
@@ -47,7 +46,11 @@ export class AuthController {
   };
 
   changePassword: RequestHandler = async (req, res) => {
-    const result = await authService.changePassword(req.user!.id, req.body);
+    const result = await passwordService.changePassword(req.user!.id, req.body, {
+      ip: req.ip,
+      userAgent: req.get("user-agent") ?? undefined,
+      deviceId: req.header("x-device-id") ?? undefined,
+    });
 
     sendSuccess(res, 200, {
       message: "Password changed successfully",
@@ -55,7 +58,9 @@ export class AuthController {
     });
   };
 
-  logout: RequestHandler = async (_req, res) => {
+  logout: RequestHandler = async (req, res) => {
+    const refreshToken = req.body?.refreshToken ?? req.cookies?.[refreshTokenCookieName];
+    await authService.logout(refreshToken);
     clearRefreshTokenCookie(res);
 
     sendSuccess(res, 200, {

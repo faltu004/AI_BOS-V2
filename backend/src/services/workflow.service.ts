@@ -98,20 +98,20 @@ export class WorkflowService {
   }
 
   async execute(id: string, _input: ExecuteWorkflowInput, userId?: string) {
-    const workflow = await this.getById(id);
+    const startedAt = new Date();
+    const workflow = await workflowRepository.markExecuted(id, startedAt, userId);
 
-    if (workflow.status === "Paused") {
+    if (!workflow) {
+      const existingWorkflow = await workflowRepository.findById(id);
+
+      if (!existingWorkflow) {
+        throw new AppError("Workflow not found", 404);
+      }
+
       throw new AppError("Cannot execute a paused workflow", 400);
     }
 
     const executionId = `${workflow._id}-${Date.now()}`;
-    const startedAt = new Date();
-
-    await workflowRepository.update(id, {
-      executionCount: workflow.executionCount + 1,
-      lastExecutedAt: startedAt,
-      ...(userId ? { updatedBy: userId as unknown as Types.ObjectId } : {}),
-    });
 
     return {
       executionId,

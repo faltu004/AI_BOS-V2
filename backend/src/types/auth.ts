@@ -1,8 +1,6 @@
-import type { UserRole } from "../constants/roles.js";
-
 export type AuthenticatedUser = {
   id: string;
-  role: UserRole;
+  role: string;
 };
 
 export type PublicUser = {
@@ -10,7 +8,7 @@ export type PublicUser = {
   fullName: string;
   companyName: string;
   email: string;
-  role: UserRole;
+  role: string;
   isEmailVerified: boolean;
   isActive: boolean;
   lastLoginAt?: Date;

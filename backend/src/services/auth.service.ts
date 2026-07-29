@@ -1,14 +1,18 @@
 import { type UserDocument } from "../models/user.model.js";
 import { userRepository } from "../repositories/user.repository.js";
+import { sessionRepository } from "../repositories/session.repository.js";
 import type { PublicUser } from "../types/auth.js";
 import { AppError } from "../utils/app-error.js";
-import { createTokenPair, verifyRefreshToken } from "../utils/jwt.js";
-import { hashPassword, verifyPassword } from "../utils/password.js";
+import { createTokenPair, decodeToken, getTokenExpiry, verifyRefreshToken } from "../utils/jwt.js";
+import { verifyPassword } from "../utils/password.js";
+import { fingerprintDevice } from "../utils/device.js";
+import { securityService, isValidObjectId } from "./security.service.js";
+import { passwordService } from "./password.service.js";
+import { env } from "../config/env.js";
 import type {
   ChangePasswordInput,
   LoginInput,
   RefreshTokenInput,
-  RegisterInput,
 } from "../validation/auth.validation.js";
 
 function toAuthUser(user: UserDocument): PublicUser {
@@ -27,34 +31,22 @@ function toAuthUser(user: UserDocument): PublicUser {
 }
 
 export class AuthService {
-  async register(input: RegisterInput) {
-    const existingUser = await userRepository.findByEmail(input.email);
+  private async trackSession(userId: string, refreshToken: string, meta?: { ip?: string; userAgent?: string; deviceId?: string }) {
+    if (!isValidObjectId(userId)) return;
+    const payload = decodeToken(refreshToken);
+    if (!payload?.jti) return;
 
-    if (existingUser) {
-      throw new AppError("A user with this email already exists", 409);
-    }
-
-    const passwordHash = await hashPassword(input.password);
-    const user = await userRepository.create({
-      fullName: input.fullName,
-      companyName: input.companyName,
-      email: input.email,
-      passwordHash,
-      role: input.role,
+    await sessionRepository.create({
+      user: userId,
+      refreshTokenJti: payload.jti,
+      expiresAt: getTokenExpiry(refreshToken),
+      userAgent: meta?.userAgent,
+      ip: meta?.ip,
+      deviceId: meta?.deviceId,
     });
-
-    const tokens = createTokenPair({
-      sub: user.id,
-      role: user.role,
-    });
-
-    return {
-      user: toAuthUser(user),
-      tokens,
-    };
   }
 
-  async login(input: LoginInput) {
+  async login(input: LoginInput, meta?: { ip?: string; userAgent?: string; deviceId?: string }) {
     const user = await userRepository.findByEmailWithPassword(input.email);
 
     if (!user) {
@@ -65,9 +57,32 @@ export class AuthService {
       throw new AppError("This account is disabled", 403);
     }
 
+    const recentFailures = await securityService.countRecentFailedLogins(user.id, env.LOCKOUT_DURATION_MINUTES);
+    if (recentFailures >= env.MAX_LOGIN_ATTEMPTS) {
+      throw new AppError(`Too many failed login attempts. Try again in ${env.LOCKOUT_DURATION_MINUTES} minutes.`, 423);
+    }
+
     const isPasswordValid = await verifyPassword(input.password, user.passwordHash);
 
     if (!isPasswordValid) {
+      await securityService.recordLoginHistory({
+        userId: user.id,
+        eventType: "login_failure",
+        ip: meta?.ip,
+        userAgent: meta?.userAgent,
+        deviceId: meta?.deviceId,
+        failureReason: "invalid_password",
+      });
+      await securityService.recordSecurityEvent({
+        userId: user.id,
+        eventType: "login_failure",
+        severity: "medium",
+        ip: meta?.ip,
+        userAgent: meta?.userAgent,
+        deviceId: meta?.deviceId,
+        description: "Failed login attempt",
+        metadata: { reason: "invalid_password" },
+      });
       throw new AppError("Invalid email or password", 401);
     }
 
@@ -78,13 +93,23 @@ export class AuthService {
       role: authUser.role,
     });
 
+    await this.trackSession(authUser.id, tokens.refreshToken, meta);
+
+    await securityService.recordLoginHistory({
+      userId: authUser.id,
+      eventType: "login_success",
+      ip: meta?.ip,
+      userAgent: meta?.userAgent,
+      deviceId: meta?.deviceId,
+    });
+
     return {
       user: toAuthUser(authUser),
       tokens,
     };
   }
 
-  async refresh(input: RefreshTokenInput) {
+  async refresh(input: RefreshTokenInput, meta?: { ip?: string; userAgent?: string; deviceId?: string }) {
     if (!input.refreshToken) {
       throw new AppError("Refresh token is required", 401);
     }
@@ -96,15 +121,45 @@ export class AuthService {
       throw new AppError("Invalid refresh token", 401);
     }
 
+    if (payload.jti && isValidObjectId(user.id)) {
+      const session = await sessionRepository.findByJti(payload.jti);
+      if (!session || session.status !== "active") {
+        throw new AppError("Invalid refresh token", 401);
+      }
+      await sessionRepository.revoke(session.id);
+    }
+
     const tokens = createTokenPair({
       sub: user.id,
       role: user.role,
+    });
+
+    await this.trackSession(user.id, tokens.refreshToken, meta);
+
+    await securityService.recordLoginHistory({
+      userId: user.id,
+      eventType: "token_refresh",
+      ip: meta?.ip,
+      userAgent: meta?.userAgent,
+      deviceId: meta?.deviceId,
     });
 
     return {
       user: toAuthUser(user),
       tokens,
     };
+  }
+
+  async logout(refreshToken?: string) {
+    if (!refreshToken) return;
+
+    const payload = decodeToken(refreshToken);
+    if (!payload?.jti) return;
+
+    const session = await sessionRepository.findByJti(payload.jti);
+    if (session && session.status === "active") {
+      await sessionRepository.revoke(session.id);
+    }
   }
 
   async getProfile(userId: string) {
@@ -118,33 +173,7 @@ export class AuthService {
   }
 
   async changePassword(userId: string, input: ChangePasswordInput) {
-    const user = await userRepository.findById(userId);
-
-    if (!user) {
-      throw new AppError("User not found", 404);
-    }
-
-    const userWithPassword = await userRepository.findByEmailWithPassword(user.email);
-
-    if (!userWithPassword) {
-      throw new AppError("User not found", 404);
-    }
-
-    const isPasswordValid = await verifyPassword(
-      input.currentPassword,
-      userWithPassword.passwordHash,
-    );
-
-    if (!isPasswordValid) {
-      throw new AppError("Current password is incorrect", 400);
-    }
-
-    const passwordHash = await hashPassword(input.newPassword);
-    await userRepository.updatePassword(userId, passwordHash);
-
-    return {
-      updated: true,
-    };
+    return passwordService.changePassword(userId, input);
   }
 }
 

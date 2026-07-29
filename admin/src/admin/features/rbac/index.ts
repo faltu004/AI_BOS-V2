@@ -1,0 +1,1 @@
+export { RBACPage } from "./RBACPage";

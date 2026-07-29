@@ -1,5 +1,6 @@
-import { ArrowRight, Linkedin, Sparkles, Twitter } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ArrowRight, Linkedin, Twitter } from "lucide-react";
+import { Button } from "@shared/ui/button";
+import { CompanyLogo } from "@shared/ui/company-logo";
 import { footerLinks } from "@/data/landing";
 
 export function Footer() {
@@ -8,10 +9,7 @@ export function Footer() {
       <div className="container grid gap-10 py-14 lg:grid-cols-[1.2fr_2fr_1.1fr]">
         <div className="space-y-5">
           <div className="flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-md bg-primary text-primary-foreground">
-              <Sparkles className="h-4 w-4" />
-            </span>
-            <span className="font-bold">AI BOS</span>
+            <CompanyLogo subtitle="Software development" />
           </div>
           <p className="max-w-sm text-sm leading-7 text-muted-foreground">
             The AI operating foundation for modern businesses, built for teams,
@@ -64,7 +62,7 @@ export function Footer() {
       </div>
       <div className="border-t py-5">
         <div className="container flex flex-col justify-between gap-2 text-xs text-muted-foreground sm:flex-row">
-          <span>© 2026 AI Business Operating System. All rights reserved.</span>
+          <span>© 2026 Nexora Softworks Pvt. Ltd. All rights reserved.</span>
           <span>Built for Phase 1 Foundation.</span>
         </div>
       </div>

@@ -4,7 +4,7 @@ export const appConfig = {
   name: "AI Business Operating System API",
   apiPrefix: env.API_PREFIX,
   isProduction: env.NODE_ENV === "production",
-  clientOrigin: env.CLIENT_ORIGIN,
+  clientOrigins: env.CLIENT_ORIGIN,
   cookieDomain: env.COOKIE_DOMAIN,
   rateLimit: {
     windowMs: env.RATE_LIMIT_WINDOW_MS,

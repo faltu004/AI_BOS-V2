@@ -88,5 +88,9 @@ projectSchema.index({
   client: "text",
   tags: "text",
 });
+projectSchema.index({ isArchived: 1, createdAt: -1 });
+projectSchema.index({ isArchived: 1, status: 1, createdAt: -1 });
+projectSchema.index({ isArchived: 1, priority: 1, endDate: 1 });
+projectSchema.index({ category: 1, status: 1, createdAt: -1 });
 
 export const ProjectModel = model("Project", projectSchema);

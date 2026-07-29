@@ -152,5 +152,9 @@ const workflowSchema = new Schema<Workflow>(
 
 workflowSchema.index({ name: "text", description: "text", tags: "text" });
 workflowSchema.index({ status: 1, isTemplate: 1 });
+workflowSchema.index({ status: 1, updatedAt: -1 });
+workflowSchema.index({ isTemplate: 1, updatedAt: -1 });
+workflowSchema.index({ triggerType: 1, updatedAt: -1 });
+workflowSchema.index({ executionCount: -1, updatedAt: -1 });
 
 export const WorkflowModel = model("Workflow", workflowSchema);

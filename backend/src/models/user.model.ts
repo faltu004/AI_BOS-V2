@@ -1,20 +1,98 @@
-import { model, Schema, type HydratedDocument } from "mongoose";
-import { userRoles, type UserRole } from "../constants/roles.js";
+import { model, Schema, type HydratedDocument, type Types } from "mongoose";
+
+export type EmployeeDocumentRef = { name: string; type: string; size: string };
+
+export type EmployeeProfile = {
+  phone?: string;
+  location?: string;
+  designation?: string;
+  employmentType?: string;
+  joiningDate?: Date;
+  employmentStatus?: "Active" | "On Leave" | "Inactive";
+  personalInformation?: {
+    dateOfBirth?: string;
+    gender?: string;
+    nationality?: string;
+    maritalStatus?: string;
+  };
+  contact?: {
+    address?: string;
+    emergencyContact?: string;
+  };
+  skills?: string[];
+  experience?: string[];
+  education?: string[];
+  documents?: EmployeeDocumentRef[];
+  salaryDetails?: {
+    annualCtc?: number;
+    monthlySalary?: number;
+    bank?: string;
+    taxId?: string;
+  };
+  performanceScore?: number;
+  employeeCode?: string;
+};
 
 export type User = {
   fullName: string;
   companyName: string;
   email: string;
   passwordHash: string;
-  role: UserRole;
+  role: string;
   isEmailVerified: boolean;
   isActive: boolean;
   lastLoginAt?: Date;
+  organizationId?: Types.ObjectId;
+  departmentId?: Types.ObjectId;
+  branchId?: Types.ObjectId;
+  managerId?: Types.ObjectId;
+  teamIds?: Types.ObjectId[];
+  employeeProfile?: EmployeeProfile;
   createdAt: Date;
   updatedAt: Date;
 };
 
 export type UserDocument = HydratedDocument<User>;
+
+const employeeProfileSchema = new Schema<EmployeeProfile>(
+  {
+    phone: { type: String, trim: true, maxlength: 32 },
+    location: { type: String, trim: true, maxlength: 160 },
+    designation: { type: String, trim: true, maxlength: 120 },
+    employmentType: { type: String, trim: true, maxlength: 40 },
+    joiningDate: { type: Date },
+    employmentStatus: { type: String, enum: ["Active", "On Leave", "Inactive"] },
+    personalInformation: {
+      dateOfBirth: { type: String, trim: true, maxlength: 32 },
+      gender: { type: String, trim: true, maxlength: 32 },
+      nationality: { type: String, trim: true, maxlength: 64 },
+      maritalStatus: { type: String, trim: true, maxlength: 32 },
+    },
+    contact: {
+      address: { type: String, trim: true, maxlength: 240 },
+      emergencyContact: { type: String, trim: true, maxlength: 64 },
+    },
+    skills: [{ type: String, trim: true, maxlength: 60 }],
+    experience: [{ type: String, trim: true, maxlength: 200 }],
+    education: [{ type: String, trim: true, maxlength: 200 }],
+    documents: [
+      {
+        name: { type: String, trim: true, maxlength: 160 },
+        type: { type: String, trim: true, maxlength: 40 },
+        size: { type: String, trim: true, maxlength: 20 },
+      },
+    ],
+    salaryDetails: {
+      annualCtc: { type: Number, min: 0 },
+      monthlySalary: { type: Number, min: 0 },
+      bank: { type: String, trim: true, maxlength: 120 },
+      taxId: { type: String, trim: true, maxlength: 40 },
+    },
+    performanceScore: { type: Number, min: 0, max: 100 },
+    employeeCode: { type: String, trim: true, maxlength: 40 },
+  },
+  { _id: false },
+);
 
 const userSchema = new Schema<User>(
   {
@@ -45,7 +123,6 @@ const userSchema = new Schema<User>(
     },
     role: {
       type: String,
-      enum: userRoles,
       default: "Employee",
       index: true,
     },
@@ -61,6 +138,28 @@ const userSchema = new Schema<User>(
     lastLoginAt: {
       type: Date,
     },
+    organizationId: {
+      type: Schema.Types.ObjectId,
+      ref: "Organization",
+      index: true,
+    },
+    departmentId: {
+      type: Schema.Types.ObjectId,
+      ref: "Department",
+      index: true,
+    },
+    branchId: {
+      type: Schema.Types.ObjectId,
+      ref: "Branch",
+      index: true,
+    },
+    managerId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      index: true,
+    },
+    teamIds: [{ type: Schema.Types.ObjectId, ref: "Team" }],
+    employeeProfile: { type: employeeProfileSchema, default: undefined },
   },
   {
     timestamps: true,

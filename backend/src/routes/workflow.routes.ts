@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { workflowController } from "../controllers/workflow.controller.js";
-import { asyncHandler } from "../middleware/async-handler.js";
+import { route } from "../middleware/async-handler.js";
 import { authenticate } from "../middleware/auth.middleware.js";
-import { authorize } from "../middleware/rbac.middleware.js";
+import { requirePermission } from "../middleware/rbac.middleware.js";
 import { validate } from "../middleware/validate.middleware.js";
 import {
   createWorkflowSchema,
@@ -19,60 +19,45 @@ workflowRoutes.use(authenticate);
 
 workflowRoutes.get(
   "/stats",
-  authorize("Admin", "CEO", "Manager", "HR"),
-  asyncHandler(workflowController.stats),
+  ...route(requirePermission("workflow.view_stats"), workflowController.stats),
 );
 
 workflowRoutes.get(
   "/",
-  validate({ query: listWorkflowsQuerySchema }),
-  asyncHandler(workflowController.list),
+  ...route(validate({ query: listWorkflowsQuerySchema }), workflowController.list),
 );
 
 workflowRoutes.post(
   "/",
-  authorize("Admin", "CEO", "Manager"),
-  validate({ body: createWorkflowSchema }),
-  asyncHandler(workflowController.create),
+  ...route(requirePermission("workflow.create"), validate({ body: createWorkflowSchema }), workflowController.create),
 );
 
 workflowRoutes.get(
   "/:id",
-  validate({ params: workflowIdParamsSchema }),
-  asyncHandler(workflowController.getById),
+  ...route(validate({ params: workflowIdParamsSchema }), workflowController.getById),
 );
 
 workflowRoutes.patch(
   "/:id",
-  authorize("Admin", "CEO", "Manager"),
-  validate({ params: workflowIdParamsSchema, body: updateWorkflowSchema }),
-  asyncHandler(workflowController.update),
+  ...route(requirePermission("workflow.update"), validate({ params: workflowIdParamsSchema, body: updateWorkflowSchema }), workflowController.update),
 );
 
 workflowRoutes.delete(
   "/:id",
-  authorize("Admin", "CEO"),
-  validate({ params: workflowIdParamsSchema }),
-  asyncHandler(workflowController.delete),
+  ...route(requirePermission("workflow.delete"), validate({ params: workflowIdParamsSchema }), workflowController.delete),
 );
 
 workflowRoutes.patch(
   "/:id/duplicate",
-  authorize("Admin", "CEO", "Manager"),
-  validate({ params: workflowIdParamsSchema, body: duplicateWorkflowSchema }),
-  asyncHandler(workflowController.duplicate),
+  ...route(requirePermission("workflow.duplicate"), validate({ params: workflowIdParamsSchema, body: duplicateWorkflowSchema }), workflowController.duplicate),
 );
 
 workflowRoutes.patch(
   "/:id/toggle",
-  authorize("Admin", "CEO", "Manager"),
-  validate({ params: workflowIdParamsSchema }),
-  asyncHandler(workflowController.toggleStatus),
+  ...route(requirePermission("workflow.toggle_status"), validate({ params: workflowIdParamsSchema }), workflowController.toggleStatus),
 );
 
 workflowRoutes.post(
   "/:id/execute",
-  authorize("Admin", "CEO", "Manager"),
-  validate({ params: workflowIdParamsSchema, body: executeWorkflowSchema }),
-  asyncHandler(workflowController.execute),
+  ...route(requirePermission("workflow.execute"), validate({ params: workflowIdParamsSchema, body: executeWorkflowSchema }), workflowController.execute),
 );

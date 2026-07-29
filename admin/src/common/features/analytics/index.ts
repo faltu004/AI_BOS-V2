@@ -1,0 +1,1 @@
+export { AnalyticsPage } from "@shared/features/analytics";

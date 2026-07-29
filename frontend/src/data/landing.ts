@@ -32,12 +32,13 @@ export type IconItem = {
 };
 
 export const navItems = [
-  { label: "Home", href: "#home" },
-  { label: "Features", href: "#features" },
-  { label: "Solutions", href: "#solutions" },
-  { label: "Modules", href: "#modules" },
-  { label: "About", href: "#about" },
-  { label: "Contact", href: "#contact" },
+  { label: "Home", href: "#home", external: false },
+  { label: "Features", href: "#features", external: false },
+  { label: "Solutions", href: "#solutions", external: false },
+  { label: "Modules", href: "#modules", external: false },
+  { label: "About & Contact", href: "#about", external: false },
+  { label: "Admin Console", href: "https://admin.yourcompany.com", external: true },
+  { label: "CEO Portal", href: "https://ceo.yourcompany.com", external: true },
 ];
 
 export const trustedCompanies = [
@@ -161,7 +162,7 @@ export const stats = [
 
 export const testimonials = [
   {
-    role: "CEO",
+    role: "Owner",
     name: "Maya Chen",
     quote:
       "AI BOS gives our leadership team a single place to understand the business, spot blockers, and move faster.",

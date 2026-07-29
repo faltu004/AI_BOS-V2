@@ -5,3 +5,13 @@ export function asyncHandler(controller: RequestHandler): RequestHandler {
     Promise.resolve(controller(req, res, next)).catch(next);
   };
 }
+
+export function route(...handlers: RequestHandler[]): RequestHandler[] {
+  const controller = handlers.at(-1);
+
+  if (!controller) {
+    return [];
+  }
+
+  return [...handlers.slice(0, -1), asyncHandler(controller)];
+}

@@ -1,72 +1,53 @@
-import type { RequestHandler } from "express";
 import { projectService } from "../services/project.service.js";
-import { sendSuccess } from "../utils/api-response.js";
+import { fileController, jsonController } from "../utils/controller.js";
 import type { ListProjectsQuery } from "../validation/project.validation.js";
 
 export class ProjectController {
-  stats: RequestHandler = async (_req, res) => {
-    const stats = await projectService.stats();
-    sendSuccess(res, 200, { message: "Project stats fetched successfully", data: stats });
-  };
+  stats = jsonController(200, "Project stats fetched successfully", () => projectService.stats());
 
-  list: RequestHandler = async (req, res) => {
-    const result = await projectService.list(req.query as unknown as ListProjectsQuery);
-    sendSuccess(res, 200, { message: "Projects fetched successfully", data: result });
-  };
+  list = jsonController(200, "Projects fetched successfully", ({ req }) =>
+    projectService.list(req.query as unknown as ListProjectsQuery),
+  );
 
-  create: RequestHandler = async (req, res) => {
-    const project = await projectService.create(req.body, req.user?.id);
-    sendSuccess(res, 201, { message: "Project created successfully", data: project });
-  };
+  create = jsonController(201, "Project created successfully", ({ req }) =>
+    projectService.create(req.body, req.user?.id),
+  );
 
-  getById: RequestHandler = async (req, res) => {
-    const project = await projectService.getById(req.params.id);
-    sendSuccess(res, 200, { message: "Project fetched successfully", data: project });
-  };
+  getById = jsonController(200, "Project fetched successfully", ({ req }) =>
+    projectService.getById(req.params.id),
+  );
 
-  update: RequestHandler = async (req, res) => {
-    const project = await projectService.update(req.params.id, req.body, req.user?.id);
-    sendSuccess(res, 200, { message: "Project updated successfully", data: project });
-  };
+  update = jsonController(200, "Project updated successfully", ({ req }) =>
+    projectService.update(req.params.id, req.body, req.user?.id),
+  );
 
-  delete: RequestHandler = async (req, res) => {
-    const result = await projectService.delete(req.params.id);
-    sendSuccess(res, 200, { message: "Project deleted successfully", data: result });
-  };
+  delete = jsonController(200, "Project deleted successfully", ({ req }) =>
+    projectService.delete(req.params.id),
+  );
 
-  archive: RequestHandler = async (req, res) => {
-    const project = await projectService.archive(req.params.id, req.user?.id);
-    sendSuccess(res, 200, { message: "Project archived successfully", data: project });
-  };
+  archive = jsonController(200, "Project archived successfully", ({ req }) =>
+    projectService.archive(req.params.id, req.user?.id),
+  );
 
-  duplicate: RequestHandler = async (req, res) => {
-    const project = await projectService.duplicate(req.params.id, req.user?.id);
-    sendSuccess(res, 201, { message: "Project duplicated successfully", data: project });
-  };
+  duplicate = jsonController(201, "Project duplicated successfully", ({ req }) =>
+    projectService.duplicate(req.params.id, req.user?.id),
+  );
 
-  bulkDelete: RequestHandler = async (req, res) => {
-    const result = await projectService.bulkDelete(req.body);
-    sendSuccess(res, 200, { message: "Projects deleted successfully", data: result });
-  };
+  bulkDelete = jsonController(200, "Projects deleted successfully", ({ req }) =>
+    projectService.bulkDelete(req.body),
+  );
 
-  bulkUpdate: RequestHandler = async (req, res) => {
-    const result = await projectService.bulkUpdate(req.body, req.user?.id);
-    sendSuccess(res, 200, { message: "Projects updated successfully", data: result });
-  };
+  bulkUpdate = jsonController(200, "Projects updated successfully", ({ req }) =>
+    projectService.bulkUpdate(req.body, req.user?.id),
+  );
 
-  exportCsv: RequestHandler = async (req, res) => {
-    const csv = await projectService.exportCsv(req.query as unknown as ListProjectsQuery);
-    res.setHeader("Content-Type", "text/csv");
-    res.setHeader("Content-Disposition", "attachment; filename=projects.csv");
-    res.status(200).send(csv);
-  };
+  exportCsv = fileController("text/csv", "attachment; filename=projects.csv", ({ req }) =>
+    projectService.exportCsv(req.query as unknown as ListProjectsQuery),
+  );
 
-  exportPdf: RequestHandler = async (req, res) => {
-    const pdf = await projectService.exportPdf(req.query as unknown as ListProjectsQuery);
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", "attachment; filename=projects.pdf");
-    res.status(200).send(pdf);
-  };
+  exportPdf = fileController("application/pdf", "attachment; filename=projects.pdf", ({ req }) =>
+    projectService.exportPdf(req.query as unknown as ListProjectsQuery),
+  );
 }
 
 export const projectController = new ProjectController();

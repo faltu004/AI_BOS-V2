@@ -1,53 +1,41 @@
-import type { RequestHandler } from "express";
 import { workflowService } from "../services/workflow.service.js";
-import { sendSuccess } from "../utils/api-response.js";
+import { jsonController } from "../utils/controller.js";
 import type { ExecuteWorkflowInput, ListWorkflowsQuery } from "../validation/workflow.validation.js";
 
 export class WorkflowController {
-  stats: RequestHandler = async (_req, res) => {
-    const stats = await workflowService.stats();
-    sendSuccess(res, 200, { message: "Workflow stats fetched successfully", data: stats });
-  };
+  stats = jsonController(200, "Workflow stats fetched successfully", () => workflowService.stats());
 
-  list: RequestHandler = async (req, res) => {
-    const result = await workflowService.list(req.query as unknown as ListWorkflowsQuery);
-    sendSuccess(res, 200, { message: "Workflows fetched successfully", data: result });
-  };
+  list = jsonController(200, "Workflows fetched successfully", ({ req }) =>
+    workflowService.list(req.query as unknown as ListWorkflowsQuery),
+  );
 
-  create: RequestHandler = async (req, res) => {
-    const workflow = await workflowService.create(req.body, req.user?.id);
-    sendSuccess(res, 201, { message: "Workflow created successfully", data: workflow });
-  };
+  create = jsonController(201, "Workflow created successfully", ({ req }) =>
+    workflowService.create(req.body, req.user?.id),
+  );
 
-  getById: RequestHandler = async (req, res) => {
-    const workflow = await workflowService.getById(req.params.id);
-    sendSuccess(res, 200, { message: "Workflow fetched successfully", data: workflow });
-  };
+  getById = jsonController(200, "Workflow fetched successfully", ({ req }) =>
+    workflowService.getById(req.params.id),
+  );
 
-  update: RequestHandler = async (req, res) => {
-    const workflow = await workflowService.update(req.params.id, req.body, req.user?.id);
-    sendSuccess(res, 200, { message: "Workflow updated successfully", data: workflow });
-  };
+  update = jsonController(200, "Workflow updated successfully", ({ req }) =>
+    workflowService.update(req.params.id, req.body, req.user?.id),
+  );
 
-  delete: RequestHandler = async (req, res) => {
-    const result = await workflowService.delete(req.params.id);
-    sendSuccess(res, 200, { message: "Workflow deleted successfully", data: result });
-  };
+  delete = jsonController(200, "Workflow deleted successfully", ({ req }) =>
+    workflowService.delete(req.params.id),
+  );
 
-  duplicate: RequestHandler = async (req, res) => {
-    const workflow = await workflowService.duplicate(req.params.id, req.body, req.user?.id);
-    sendSuccess(res, 201, { message: "Workflow duplicated successfully", data: workflow });
-  };
+  duplicate = jsonController(201, "Workflow duplicated successfully", ({ req }) =>
+    workflowService.duplicate(req.params.id, req.body, req.user?.id),
+  );
 
-  toggleStatus: RequestHandler = async (req, res) => {
-    const workflow = await workflowService.toggleStatus(req.params.id, req.user?.id);
-    sendSuccess(res, 200, { message: "Workflow status updated successfully", data: workflow });
-  };
+  toggleStatus = jsonController(200, "Workflow status updated successfully", ({ req }) =>
+    workflowService.toggleStatus(req.params.id, req.user?.id),
+  );
 
-  execute: RequestHandler = async (req, res) => {
-    const result = await workflowService.execute(req.params.id, req.body as ExecuteWorkflowInput, req.user?.id);
-    sendSuccess(res, 200, { message: "Workflow executed successfully", data: result });
-  };
+  execute = jsonController(200, "Workflow executed successfully", ({ req }) =>
+    workflowService.execute(req.params.id, req.body as ExecuteWorkflowInput, req.user?.id),
+  );
 }
 
 export const workflowController = new WorkflowController();

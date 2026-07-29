@@ -2,12 +2,13 @@ import { Router } from "express";
 import { analyticsController } from "../controllers/analytics.controller.js";
 import { asyncHandler } from "../middleware/async-handler.js";
 import { authenticate } from "../middleware/auth.middleware.js";
+import { requirePermission } from "../middleware/rbac.middleware.js";
 import { validate } from "../middleware/validate.middleware.js";
 import { analyticsQuerySchema, analyticsExportSchema } from "../validation/analytics.validation.js";
 
 export const analyticsRoutes = Router();
 
-analyticsRoutes.use(authenticate);
+analyticsRoutes.use(authenticate, requirePermission("analytics.view"));
 
 analyticsRoutes.get("/", validate({ query: analyticsQuerySchema }), asyncHandler(analyticsController.getSection));
 

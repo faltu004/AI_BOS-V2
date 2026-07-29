@@ -24,7 +24,7 @@ export class WorkflowRepository {
   }
 
   async findById(id: string) {
-    return WorkflowModel.findById(id);
+    return WorkflowModel.findById(id).lean();
   }
 
   async list(query: ListWorkflowsQuery) {
@@ -35,7 +35,7 @@ export class WorkflowRepository {
     };
 
     const [items, total] = await Promise.all([
-      WorkflowModel.find(filter).sort(sort).skip(skip).limit(query.limit),
+      WorkflowModel.find(filter).sort(sort).skip(skip).limit(query.limit).lean(),
       WorkflowModel.countDocuments(filter),
     ]);
 
@@ -53,40 +53,61 @@ export class WorkflowRepository {
   async listAll(query: ListWorkflowsQuery) {
     return WorkflowModel.find(buildWorkflowFilter(query)).sort({
       [query.sortBy]: query.sortOrder === "asc" ? 1 : -1,
-    });
+    }).lean();
   }
 
   async update(id: string, updates: UpdateQuery<WorkflowDocument>) {
     return WorkflowModel.findByIdAndUpdate(id, updates, {
       new: true,
       runValidators: true,
-    });
+    }).lean();
+  }
+
+  async markExecuted(id: string, startedAt: Date, updatedBy?: string) {
+    return WorkflowModel.findOneAndUpdate(
+      { _id: id, status: { $ne: "Paused" } },
+      {
+        $inc: { executionCount: 1 },
+        $set: {
+          lastExecutedAt: startedAt,
+          ...(updatedBy ? { updatedBy } : {}),
+        },
+      },
+      { new: true, runValidators: true },
+    ).lean();
   }
 
   async delete(id: string) {
-    return WorkflowModel.findByIdAndDelete(id);
+    return WorkflowModel.findByIdAndDelete(id).select("_id").lean();
   }
 
   async stats() {
-    const now = new Date();
-
-    const [total, active, paused, templates, executions] = await Promise.all([
-      WorkflowModel.countDocuments({}),
-      WorkflowModel.countDocuments({ status: "Active" }),
-      WorkflowModel.countDocuments({ status: "Paused" }),
-      WorkflowModel.countDocuments({ isTemplate: true }),
-      WorkflowModel.aggregate([
-        { $match: {} },
-        { $group: { _id: null, totalExecutions: { $sum: "$executionCount" } } },
-      ]),
+    const [stats] = await WorkflowModel.aggregate<{
+      total: number;
+      active: number;
+      paused: number;
+      templates: number;
+      totalExecutions: number;
+    }>([
+      {
+        $group: {
+          _id: null,
+          total: { $sum: 1 },
+          active: { $sum: { $cond: [{ $eq: ["$status", "Active"] }, 1, 0] } },
+          paused: { $sum: { $cond: [{ $eq: ["$status", "Paused"] }, 1, 0] } },
+          templates: { $sum: { $cond: ["$isTemplate", 1, 0] } },
+          totalExecutions: { $sum: "$executionCount" },
+        },
+      },
+      { $project: { _id: 0, total: 1, active: 1, paused: 1, templates: 1, totalExecutions: 1 } },
     ]);
 
     return {
-      total,
-      active,
-      paused,
-      templates,
-      totalExecutions: executions[0]?.totalExecutions ?? 0,
+      total: stats?.total ?? 0,
+      active: stats?.active ?? 0,
+      paused: stats?.paused ?? 0,
+      templates: stats?.templates ?? 0,
+      totalExecutions: stats?.totalExecutions ?? 0,
       recentExecutions: 0,
     };
   }

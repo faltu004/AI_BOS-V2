@@ -6,7 +6,16 @@ import { AppError } from "../utils/app-error.js";
 import { logger } from "../utils/logger.js";
 
 export const errorMiddleware: ErrorRequestHandler = (error, req, res, _next) => {
+  const errorContext = {
+    requestId: req.requestId,
+    method: req.method,
+    path: req.originalUrl,
+    userId: req.user?.id,
+  };
+
   if (error instanceof ZodError) {
+    logger.warn({ ...errorContext, issues: error.issues }, "request validation failed");
+
     return res.status(422).json({
       success: false,
       message: "Validation failed",
@@ -16,6 +25,8 @@ export const errorMiddleware: ErrorRequestHandler = (error, req, res, _next) => 
   }
 
   if (error instanceof multer.MulterError) {
+    logger.warn({ ...errorContext, code: error.code }, "upload validation failed");
+
     return res.status(400).json({
       success: false,
       message: error.message,
@@ -24,6 +35,8 @@ export const errorMiddleware: ErrorRequestHandler = (error, req, res, _next) => 
   }
 
   if (error instanceof AppError) {
+    logger.warn({ ...errorContext, statusCode: error.statusCode }, error.message);
+
     return res.status(error.statusCode).json({
       success: false,
       message: error.message,
@@ -31,7 +44,7 @@ export const errorMiddleware: ErrorRequestHandler = (error, req, res, _next) => 
     });
   }
 
-  logger.error(error);
+  logger.error({ ...errorContext, error }, "unhandled request error");
 
   return res.status(500).json({
     success: false,
