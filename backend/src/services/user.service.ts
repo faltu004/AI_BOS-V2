@@ -3,9 +3,18 @@ import { userRepository } from "../repositories/user.repository.js";
 import { PasswordChangeModel } from "../models/password-history.model.js";
 import { AppError } from "../utils/app-error.js";
 import { hashPassword } from "../utils/password.js";
+import { assertCanManage } from "./hierarchy.service.js";
 import { Types } from "mongoose";
-import type { CreateUserProfileInput, UpdateEmployeeProfileInput } from "../validation/user.validation.js";
-import type { UserDocument } from "../models/user.model.js";
+import type {
+  ChangeManagerInput,
+  ChangeRoleInput,
+  CompleteProfileInput,
+  CreateUserProfileInput,
+  MoveDepartmentInput,
+  UpdateEmployeeProfileInput,
+  UpdateOwnProfileInput,
+} from "../validation/user.validation.js";
+import type { EmployeeProfile, UserDocument } from "../models/user.model.js";
 
 function getInitials(fullName: string): string {
   return fullName
@@ -18,6 +27,7 @@ function getInitials(fullName: string): string {
 
 function toEmployeeDto(user: UserDocument) {
   const department = user.departmentId as unknown as { _id: Types.ObjectId; name: string } | null;
+  const manager = user.managerId as unknown as { _id: Types.ObjectId; fullName: string; email: string; role: string } | null;
   const profile = user.employeeProfile ?? {};
 
   return {
@@ -28,11 +38,19 @@ function toEmployeeDto(user: UserDocument) {
     role: user.role,
     isEmailVerified: user.isEmailVerified,
     isActive: user.isActive,
+    isProfileComplete: user.isProfileComplete,
     lastLoginAt: user.lastLoginAt,
     createdAt: user.createdAt,
-    avatar: getInitials(user.fullName),
+    avatar: user.avatar ?? getInitials(user.fullName),
     departmentId: department && typeof department === "object" ? department._id : user.departmentId,
     department: department && typeof department === "object" ? department.name : undefined,
+    branchId: user.branchId?.toString(),
+    managerId: manager && typeof manager === "object" ? manager._id.toString() : user.managerId?.toString(),
+    manager:
+      manager && typeof manager === "object"
+        ? { id: manager._id.toString(), fullName: manager.fullName, email: manager.email, role: manager.role }
+        : undefined,
+    teamIds: (user.teamIds ?? []).map((id) => id.toString()),
     employeeCode: profile.employeeCode ?? `EMP-${user.id.slice(-6).toUpperCase()}`,
     phone: profile.phone,
     location: profile.location,
@@ -51,9 +69,16 @@ function toEmployeeDto(user: UserDocument) {
   };
 }
 
+const protectedAccountRoles = new Set(["Owner", "Administrator", "CEO", "Admin"]);
+
 export class UserService {
   async listUsers() {
-    const users = await userRepository.findMany();
+    const users = await userRepository.findMany({ isActive: true });
+    return users.map((user) => toEmployeeDto(user));
+  }
+
+  async listUsersByDepartment(departmentId: string) {
+    const users = await userRepository.findMany({ departmentId, isActive: true });
     return users.map((user) => toEmployeeDto(user));
   }
 
@@ -80,6 +105,17 @@ export class UserService {
       throw new AppError("A user with this email already exists", 409);
     }
 
+    const managerId = input.managerId ?? (["Owner", "Administrator"].includes(creator.role) ? undefined : creator.id);
+    if (managerId) {
+      const manager = await userRepository.findById(managerId);
+      if (!manager || !manager.isActive) {
+        throw new AppError("Selected manager was not found", 404);
+      }
+      if (creator.organizationId?.toString() !== manager.organizationId?.toString()) {
+        throw new AppError("Selected manager must belong to your organization", 400);
+      }
+    }
+
     const passwordHash = await hashPassword(input.password);
     const user = await userRepository.create({
       fullName: input.fullName,
@@ -89,7 +125,11 @@ export class UserService {
       role: input.role,
       organizationId: creator.organizationId,
       departmentId: input.departmentId,
-      employeeProfile: input.employeeProfile,
+      branchId: input.branchId,
+      managerId,
+      teamIds: input.teamIds,
+      employeeProfile: { ...input.employeeProfile, phone: input.phone },
+      isProfileComplete: false,
     });
 
     const isValidId = Types.ObjectId.isValid(user.id);
@@ -107,10 +147,32 @@ export class UserService {
     return toEmployeeDto(user);
   }
 
-  async updateEmployeeProfile(actorUserId: string, targetUserId: string, input: UpdateEmployeeProfileInput) {
+  async updateEmployeeProfile(
+    actorUserId: string | undefined,
+    actorRole: string | undefined,
+    targetUserId: string,
+    input: UpdateEmployeeProfileInput,
+  ) {
     const target = await userRepository.findById(targetUserId);
     if (!target) {
       throw new AppError("User not found", 404);
+    }
+
+    if ((input.departmentId || input.managerId) && actorUserId && actorRole) {
+      await assertCanManage({ id: actorUserId, role: actorRole }, targetUserId);
+    }
+
+    if (input.managerId) {
+      if (input.managerId === targetUserId) {
+        throw new AppError("A user cannot report to themselves", 400);
+      }
+      const manager = await userRepository.findById(input.managerId);
+      if (!manager || !manager.isActive) {
+        throw new AppError("Selected manager was not found", 404);
+      }
+      if (target.organizationId?.toString() !== manager.organizationId?.toString()) {
+        throw new AppError("Selected manager must belong to the same organization", 400);
+      }
     }
 
     const updated = await userRepository.updateEmployeeProfile(targetUserId, input);
@@ -121,12 +183,103 @@ export class UserService {
     return toEmployeeDto(updated);
   }
 
+  async moveToDepartment(actorUserId: string, actorRole: string, targetUserId: string, input: MoveDepartmentInput) {
+    const target = await userRepository.findById(targetUserId);
+    if (!target) {
+      throw new AppError("User not found", 404);
+    }
+
+    await assertCanManage({ id: actorUserId, role: actorRole }, targetUserId);
+
+    const updated = await userRepository.updateEmployeeProfile(targetUserId, { departmentId: input.departmentId });
+    if (!updated) {
+      throw new AppError("User not found", 404);
+    }
+
+    return toEmployeeDto(updated);
+  }
+
+  async changeManager(actorUserId: string, actorRole: string, targetUserId: string, input: ChangeManagerInput) {
+    const target = await userRepository.findById(targetUserId);
+    if (!target) {
+      throw new AppError("User not found", 404);
+    }
+
+    if (input.managerId === targetUserId) {
+      throw new AppError("A user cannot report to themselves", 400);
+    }
+
+    const manager = await userRepository.findById(input.managerId);
+    if (!manager || !manager.isActive) {
+      throw new AppError("Selected manager was not found", 404);
+    }
+    if (target.organizationId?.toString() !== manager.organizationId?.toString()) {
+      throw new AppError("Selected manager must belong to the same organization", 400);
+    }
+
+    await assertCanManage({ id: actorUserId, role: actorRole }, targetUserId);
+
+    const updated = await userRepository.updateEmployeeProfile(targetUserId, { managerId: input.managerId });
+    if (!updated) {
+      throw new AppError("User not found", 404);
+    }
+
+    return toEmployeeDto(updated);
+  }
+
+  async changeRole(actorUserId: string, actorRole: string, targetUserId: string, input: ChangeRoleInput) {
+    const target = await userRepository.findById(targetUserId);
+    if (!target) {
+      throw new AppError("User not found", 404);
+    }
+
+    await assertCanManage({ id: actorUserId, role: actorRole }, targetUserId);
+
+    const assignableRoles = getAssignableRoles(actorRole);
+    if (!assignableRoles.includes(input.role)) {
+      throw new AppError("You are not allowed to assign this role", 403);
+    }
+
+    const updated = await userRepository.updateRole(targetUserId, input.role);
+    if (!updated) {
+      throw new AppError("User not found", 404);
+    }
+
+    return toEmployeeDto(updated);
+  }
+
+  async deleteUser(actorUserId: string, actorRole: string, targetUserId: string) {
+    if (actorUserId === targetUserId) {
+      throw new AppError("You cannot remove your own account", 400);
+    }
+
+    const target = await userRepository.findById(targetUserId);
+    if (!target || !target.isActive) {
+      throw new AppError("User not found", 404);
+    }
+
+    if (protectedAccountRoles.has(target.role)) {
+      throw new AppError("CEO and administrator accounts cannot be removed", 400);
+    }
+
+    await assertCanManage({ id: actorUserId, role: actorRole }, targetUserId);
+
+    const updated = await userRepository.deactivate(targetUserId);
+    if (!updated) {
+      throw new AppError("User not found", 404);
+    }
+
+    return { deleted: true, id: targetUserId };
+  }
+
   async getProfile(userId: string) {
     const user = await userRepository.findById(userId);
 
     if (!user) {
       throw new AppError("User not found", 404);
     }
+
+    const profile = user.employeeProfile ?? {};
 
     return {
       id: user.id,
@@ -136,15 +289,60 @@ export class UserService {
       role: user.role,
       isEmailVerified: user.isEmailVerified,
       isActive: user.isActive,
+      isProfileComplete: user.isProfileComplete,
       lastLoginAt: user.lastLoginAt,
       organizationId: user.organizationId,
       departmentId: user.departmentId,
       branchId: user.branchId,
       managerId: user.managerId,
       teamIds: user.teamIds,
+      avatar: user.avatar ?? getInitials(user.fullName),
+      phone: profile.phone,
+      location: profile.location,
+      personalInformation: profile.personalInformation,
+      contact: profile.contact,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
+  }
+
+  async updateOwnProfile(userId: string, input: UpdateOwnProfileInput) {
+    const employeeProfile: Partial<EmployeeProfile> = {};
+    if (input.phone !== undefined) employeeProfile.phone = input.phone;
+    if (input.location !== undefined) employeeProfile.location = input.location;
+    if (input.personalInformation !== undefined) employeeProfile.personalInformation = input.personalInformation;
+    if (input.contact !== undefined) employeeProfile.contact = input.contact;
+
+    const updated = await userRepository.updateEmployeeProfile(userId, {
+      fullName: input.fullName,
+      avatar: input.avatar,
+      ...(Object.keys(employeeProfile).length > 0 ? { employeeProfile: employeeProfile as EmployeeProfile } : {}),
+    });
+
+    if (!updated) {
+      throw new AppError("User not found", 404);
+    }
+
+    return toEmployeeDto(updated);
+  }
+
+  async completeOwnProfile(userId: string, input: CompleteProfileInput) {
+    const updated = await userRepository.updateEmployeeProfile(userId, {
+      employeeProfile: {
+        designation: input.designation,
+        employmentType: input.employmentType,
+        joiningDate: input.joiningDate,
+        personalInformation: input.personalInformation,
+        contact: input.contact,
+      },
+      isProfileComplete: true,
+    });
+
+    if (!updated) {
+      throw new AppError("User not found", 404);
+    }
+
+    return toEmployeeDto(updated);
   }
 
   async getPasswordChanges(userId: string) {

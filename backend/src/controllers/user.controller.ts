@@ -31,10 +31,64 @@ export class UserController {
   };
 
   updateProfile: RequestHandler = async (req, res) => {
-    const user = await userService.updateEmployeeProfile(req.user!.id, req.params.id, req.body);
+    const user = await userService.updateEmployeeProfile(req.user!.id, req.user!.role, req.params.id, req.body);
 
     sendSuccess(res, 200, {
       message: "Employee profile updated successfully",
+      data: user,
+    });
+  };
+
+  moveDepartment: RequestHandler = async (req, res) => {
+    const user = await userService.moveToDepartment(req.user!.id, req.user!.role, req.params.id, req.body);
+
+    sendSuccess(res, 200, {
+      message: "Employee moved to department successfully",
+      data: user,
+    });
+  };
+
+  changeManager: RequestHandler = async (req, res) => {
+    const user = await userService.changeManager(req.user!.id, req.user!.role, req.params.id, req.body);
+
+    sendSuccess(res, 200, {
+      message: "Employee manager updated successfully",
+      data: user,
+    });
+  };
+
+  changeRole: RequestHandler = async (req, res) => {
+    const user = await userService.changeRole(req.user!.id, req.user!.role, req.params.id, req.body);
+
+    sendSuccess(res, 200, {
+      message: "Employee role updated successfully",
+      data: user,
+    });
+  };
+
+  delete: RequestHandler = async (req, res) => {
+    const result = await userService.deleteUser(req.user!.id, req.user!.role, req.params.id);
+
+    sendSuccess(res, 200, {
+      message: "Employee removed successfully",
+      data: result,
+    });
+  };
+
+  updateOwnProfile: RequestHandler = async (req, res) => {
+    const user = await userService.updateOwnProfile(req.user!.id, req.body);
+
+    sendSuccess(res, 200, {
+      message: "Profile updated successfully",
+      data: user,
+    });
+  };
+
+  completeOwnProfile: RequestHandler = async (req, res) => {
+    const user = await userService.completeOwnProfile(req.user!.id, req.body);
+
+    sendSuccess(res, 200, {
+      message: "Profile completed successfully",
       data: user,
     });
   };

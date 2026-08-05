@@ -5,69 +5,69 @@ import { Button } from "@shared/ui/button";
 import { ConfirmContext, type ConfirmOptions } from "@shared/ui/confirm-dialog-context";
 
 type ConfirmRequest = ConfirmOptions & {
-  onResolve: (value: boolean) => void;
+ onResolve: (value: boolean) => void;
 };
 
 export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
-  const [request, setRequest] = useState<ConfirmRequest | null>(null);
+ const [request, setRequest] = useState<ConfirmRequest | null>(null);
 
-  const confirm = useCallback((options: ConfirmOptions) => {
-    return new Promise<boolean>((resolve) => {
-      setRequest({ ...options, onResolve: resolve });
-    });
-  }, []);
+ const confirm = useCallback((options: ConfirmOptions) => {
+ return new Promise<boolean>((resolve) => {
+ setRequest({ ...options, onResolve: resolve });
+ });
+ }, []);
 
-  const close = (value: boolean) => {
-    request?.onResolve(value);
-    setRequest(null);
-  };
+ const close = (value: boolean) => {
+ request?.onResolve(value);
+ setRequest(null);
+ };
 
-  const value = useMemo(() => ({ confirm }), [confirm]);
+ const value = useMemo(() => ({ confirm }), [confirm]);
 
-  return (
-    <ConfirmContext.Provider value={value}>
-      {children}
-      <AnimatePresence>
-        {request && (
-          <motion.div
-            animate={{ opacity: 1 }}
-            className="fixed inset-0 z-[90] flex items-center justify-center bg-foreground/30 p-4 backdrop-blur-sm"
-            exit={{ opacity: 0 }}
-            initial={{ opacity: 0 }}
-          >
-            <motion.div
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              aria-modal="true"
-              className="w-full max-w-md rounded-lg border bg-background/95 p-5 shadow-glass backdrop-blur-2xl"
-              exit={{ opacity: 0, scale: 0.98, y: 12 }}
-              initial={{ opacity: 0, scale: 0.98, y: 12 }}
-              role="dialog"
-            >
-              <div className="flex items-start gap-4">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
-                  <TriangleAlert className="h-5 w-5" />
-                </span>
-                <div className="min-w-0">
-                  <h2 className="text-lg font-bold">{request.title}</h2>
-                  {request.description && <p className="mt-2 text-sm leading-6 text-muted-foreground">{request.description}</p>}
-                </div>
-              </div>
-              <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                <Button onClick={() => close(false)} type="button" variant="outline">
-                  {request.cancelLabel ?? "Cancel"}
-                </Button>
-                <Button
-                  className={request.tone === "danger" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : undefined}
-                  onClick={() => close(true)}
-                  type="button"
-                >
-                  {request.confirmLabel ?? "Confirm"}
-                </Button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </ConfirmContext.Provider>
-  );
+ return (
+ <ConfirmContext.Provider value={value}>
+ {children}
+ <AnimatePresence>
+ {request && (
+ <motion.div
+ animate={{ opacity: 1 }}
+ className="fixed inset-0 z-[90] flex items-center justify-center bg-foreground/30 p-4"
+ exit={{ opacity: 0 }}
+ initial={{ opacity: 0 }}
+ >
+ <motion.div
+ animate={{ opacity: 1, scale: 1, y: 0 }}
+ aria-modal="true"
+ className="w-full max-w-md rounded-lg border bg-background p-5 shadow-glass"
+ exit={{ opacity: 0, scale: 0.98, y: 12 }}
+ initial={{ opacity: 0, scale: 0.98, y: 12 }}
+ role="dialog"
+ >
+ <div className="flex items-start gap-4">
+ <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
+ <TriangleAlert className="h-5 w-5" />
+ </span>
+ <div className="min-w-0">
+ <h2 className="text-lg font-bold">{request.title}</h2>
+ {request.description && <p className="mt-2 text-sm leading-6 text-muted-foreground">{request.description}</p>}
+ </div>
+ </div>
+ <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+ <Button onClick={() => close(false)} type="button" variant="outline">
+ {request.cancelLabel ?? "Cancel"}
+ </Button>
+ <Button
+ className={request.tone === "danger" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : undefined}
+ onClick={() => close(true)}
+ type="button"
+ >
+ {request.confirmLabel ?? "Confirm"}
+ </Button>
+ </div>
+ </motion.div>
+ </motion.div>
+ )}
+ </AnimatePresence>
+ </ConfirmContext.Provider>
+ );
 }

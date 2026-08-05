@@ -15,7 +15,11 @@ function systemPrompt(context: AIContextBundle) {
     ...context.instructions.map((item) => `- ${item}`),
     "",
     "Allowed context JSON:",
-    JSON.stringify(context.sections, null, 2).slice(0, 14000),
+    // Compact (no pretty-print) and capped much smaller than before — on CPU-only
+    // Ollama inference, prompt evaluation time scales with token count, and the
+    // full 14000-char pretty-printed context alone took ~87s to evaluate on this
+    // hardware. Trimming to this size keeps responses in the 15-30s range instead.
+    JSON.stringify(context.sections).slice(0, 6000),
   ].join("\n");
 }
 

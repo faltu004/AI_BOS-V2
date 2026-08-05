@@ -35,25 +35,6 @@ export type WorkflowStep = {
   order: number;
 };
 
-export type WorkflowExecutionLog = {
-  executionId: string;
-  startedAt: Date;
-  finishedAt?: Date;
-  status: "running" | "completed" | "failed" | "cancelled";
-  triggeredBy?: string;
-  inputPayload: Record<string, unknown>;
-  outputPayload?: Record<string, unknown>;
-  error?: string;
-  stepLogs: Array<{
-    stepId: string;
-    startedAt: Date;
-    finishedAt?: Date;
-    status: "running" | "completed" | "failed" | "skipped";
-    output?: Record<string, unknown>;
-    error?: string;
-  }>;
-};
-
 export type Workflow = {
   name: string;
   description?: string;
@@ -98,33 +79,6 @@ const stepSchema = new Schema<WorkflowStep>(
       ),
     ],
     order: { type: Number, required: true, min: 0 },
-  },
-  { _id: false },
-);
-
-const executionLogSchema = new Schema<WorkflowExecutionLog>(
-  {
-    executionId: { type: String, required: true },
-    startedAt: { type: Date, required: true },
-    finishedAt: { type: Date },
-    status: { type: String, enum: ["running", "completed", "failed", "cancelled"], default: "running" },
-    triggeredBy: { type: String },
-    inputPayload: { type: Schema.Types.Mixed, default: {} },
-    outputPayload: { type: Schema.Types.Mixed },
-    error: { type: String },
-    stepLogs: [
-      new Schema(
-        {
-          stepId: { type: String, required: true },
-          startedAt: { type: Date, required: true },
-          finishedAt: { type: Date },
-          status: { type: String, enum: ["running", "completed", "failed", "skipped"], default: "running" },
-          output: { type: Schema.Types.Mixed },
-          error: { type: String },
-        },
-        { _id: false },
-      ),
-    ],
   },
   { _id: false },
 );

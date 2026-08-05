@@ -6,12 +6,17 @@ export type EffectivePermissions = {
 };
 
 const noAccess: EffectivePermissions = { hasFullAccess: false, permissionKeys: new Set() };
+const builtInFullAccessRoles = new Set(["owner", "administrator", "ceo", "admin"]);
 
 export class PermissionService {
   async resolveEffectivePermissions(roleSlug: string): Promise<EffectivePermissions> {
-    const role = await roleRepository.findBySlug(roleSlug.toLowerCase());
+    const normalizedRole = roleSlug.toLowerCase();
+    const role = await roleRepository.findBySlug(normalizedRole);
 
     if (!role || !role.isActive) {
+      if (builtInFullAccessRoles.has(normalizedRole)) {
+        return { hasFullAccess: true, permissionKeys: new Set() };
+      }
       return noAccess;
     }
 

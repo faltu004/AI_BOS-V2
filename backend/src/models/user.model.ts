@@ -47,7 +47,9 @@ export type User = {
   branchId?: Types.ObjectId;
   managerId?: Types.ObjectId;
   teamIds?: Types.ObjectId[];
+  avatar?: string;
   employeeProfile?: EmployeeProfile;
+  isProfileComplete: boolean;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -159,7 +161,12 @@ const userSchema = new Schema<User>(
       index: true,
     },
     teamIds: [{ type: Schema.Types.ObjectId, ref: "Team" }],
+    avatar: { type: String },
     employeeProfile: { type: employeeProfileSchema, default: undefined },
+    isProfileComplete: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

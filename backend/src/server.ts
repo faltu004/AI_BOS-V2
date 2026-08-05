@@ -5,6 +5,7 @@ import { connectDatabase, disconnectDatabase } from "./database/mongo.js";
 import { startBackupScheduler } from "./jobs/backup-scheduler.js";
 import { startIntegrationSyncScheduler } from "./jobs/integration-sync-scheduler.js";
 import { startNotificationScheduler } from "./jobs/notification-scheduler.js";
+import { startWorkflowStepScheduler } from "./jobs/workflow-step-scheduler.js";
 import { initSocketServer } from "./realtime/socket-server.js";
 import { logger } from "./utils/logger.js";
 
@@ -17,6 +18,7 @@ async function bootstrap() {
   startNotificationScheduler();
   startIntegrationSyncScheduler();
   startBackupScheduler();
+  startWorkflowStepScheduler();
 
   server.listen(env.PORT, () => {
     logger.info(`AI BOS API running on port ${env.PORT}`);

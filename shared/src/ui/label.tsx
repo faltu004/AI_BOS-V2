@@ -2,16 +2,16 @@ import * as React from "react";
 import { cn } from "@shared/lib/utils";
 
 const Label = React.forwardRef<HTMLLabelElement, React.ComponentProps<"label">>(
-  ({ className, ...props }, ref) => (
-    <label
-      className={cn(
-        "text-sm font-semibold leading-none text-foreground peer-disabled:cursor-not-allowed peer-disabled:opacity-70",
-        className,
-      )}
-      ref={ref}
-      {...props}
-    />
-  ),
+ ({ className, ...props }, ref) => (
+ <label
+ className={cn(
+ "text-sm font-semibold leading-none text-foreground peer-disabled:cursor-not-allowed peer-disabled:opacity-70",
+ className,
+ )}
+ ref={ref}
+ {...props}
+ />
+ ),
 );
 Label.displayName = "Label";
 

@@ -27,7 +27,7 @@ const envSchema = z.object({
   JWT_REFRESH_EXPIRES_IN: z.string().default("7d"),
   BCRYPT_SALT_ROUNDS: z.coerce.number().int().min(8).max(14).default(12),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(900000),
-  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
+  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(1200),
   UPLOAD_MAX_FILE_SIZE_MB: z.coerce.number().int().positive().default(10),
   OLLAMA_BASE_URL: z.string().url().default("http://127.0.0.1:11434"),
   OLLAMA_MODEL: z.string().default("llama3.2:3b"),
@@ -54,6 +54,9 @@ const envSchema = z.object({
   ENABLE_TRUSTED_DEVICES: z.coerce.boolean().default(true),
   ENABLE_2FA: z.coerce.boolean().default(false),
   ENABLE_SECURITY_DASHBOARD: z.coerce.boolean().default(true),
+  ATTENDANCE_OFFICE_LAT: z.coerce.number().min(-90).max(90).default(12.9716),
+  ATTENDANCE_OFFICE_LNG: z.coerce.number().min(-180).max(180).default(77.5946),
+  ATTENDANCE_RADIUS_METERS: z.coerce.number().int().positive().default(300),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);

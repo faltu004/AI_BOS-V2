@@ -1,6 +1,7 @@
 import { workflowService } from "../services/workflow.service.js";
 import { jsonController } from "../utils/controller.js";
 import type { ExecuteWorkflowInput, ListWorkflowsQuery } from "../validation/workflow.validation.js";
+import { AppError } from "../utils/app-error.js";
 
 export class WorkflowController {
   stats = jsonController(200, "Workflow stats fetched successfully", () => workflowService.stats());
@@ -36,6 +37,15 @@ export class WorkflowController {
   execute = jsonController(200, "Workflow executed successfully", ({ req }) =>
     workflowService.execute(req.params.id, req.body as ExecuteWorkflowInput, req.user?.id),
   );
+
+  listExecutions = jsonController(200, "Workflow executions fetched successfully", ({ req }) =>
+    workflowService.listExecutions(req.params.id, req.query.limit ? Number(req.query.limit) : undefined),
+  );
+
+  approveStep = jsonController(200, "Workflow step decision recorded", ({ req }) => {
+    if (!req.user) throw new AppError("Authentication required", 401);
+    return workflowService.approveStep(req.params.executionId, req.user.role, req.body.approved);
+  });
 }
 
 export const workflowController = new WorkflowController();

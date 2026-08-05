@@ -2,6 +2,7 @@ import type { Types } from "mongoose";
 import { departmentRepository } from "../repositories/department.repository.js";
 import { organizationRepository } from "../repositories/organization.repository.js";
 import { teamRepository } from "../repositories/team.repository.js";
+import { userRepository } from "../repositories/user.repository.js";
 import { AppError } from "../utils/app-error.js";
 import type { CreateTeamInput, ListTeamsQuery, UpdateTeamInput } from "../validation/team.validation.js";
 
@@ -21,6 +22,14 @@ export class TeamService {
   async create(input: CreateTeamInput, userId?: string) {
     const organizationId = await resolveOrganizationId();
     await assertDepartmentExists(input.departmentId);
+
+    const lead = await userRepository.findById(input.leadId);
+    if (!lead || !lead.isActive) {
+      throw new AppError("Selected team lead was not found", 404);
+    }
+    if (lead.departmentId?.toString() !== input.departmentId) {
+      throw new AppError("Team lead must already belong to this department", 400);
+    }
 
     return teamRepository.create({
       ...input,

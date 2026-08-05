@@ -39,7 +39,7 @@ export class DepartmentRepository {
     };
 
     const [items, total] = await Promise.all([
-      DepartmentModel.find(filter).sort(sort).skip(skip).limit(query.limit).lean(),
+      DepartmentModel.find(filter).sort(sort).skip(skip).limit(query.limit).populate("headId", "fullName email role").lean(),
       DepartmentModel.countDocuments(filter),
     ]);
 

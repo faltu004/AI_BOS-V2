@@ -15,6 +15,10 @@ export class DepartmentController {
     departmentService.getById(req.params.id),
   );
 
+  members = jsonController(200, "Department members fetched successfully", ({ req }) =>
+    departmentService.members(req.params.id),
+  );
+
   update = jsonController(200, "Department updated successfully", ({ req }) =>
     departmentService.update(req.params.id, req.body, req.user?.id),
   );

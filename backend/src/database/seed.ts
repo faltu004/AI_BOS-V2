@@ -707,12 +707,28 @@ async function seedRBAC() {
     "project.bulk_delete",
     "project.archive",
     "project.duplicate",
+    "project.comment",
+    "task.view_stats",
+    "task.export",
+    "task.create",
+    "task.update",
+    "task.delete",
+    "task.bulk_update",
+    "task.bulk_delete",
+    "task.log_time",
+    "task.comment",
+    "lead.view_all",
+    "lead.view_stats",
+    "lead.create",
+    "lead.update",
+    "lead.delete",
     "workflow.view_stats",
     "workflow.create",
     "workflow.update",
     "workflow.duplicate",
     "workflow.toggle_status",
     "workflow.execute",
+    "workflow.approve_step",
     "team.create",
     "team.update",
     "policy.view_all",
@@ -726,6 +742,7 @@ async function seedRBAC() {
   ];
   const hrPermissions = [
     "project.view_stats",
+    "task.view_stats",
     "workflow.view_stats",
     "department.create",
     "department.update",
@@ -747,7 +764,7 @@ async function seedRBAC() {
     "user.create",
     "user.edit",
   ];
-  const employeePermissions: string[] = [];
+  const employeePermissions: string[] = ["task.create", "task.update", "task.log_time", "task.comment"];
 
   const roleDefinitions = [
     { slug: "owner", name: "Owner", isSystem: true, hasFullAccess: true, rank: 100, permissionKeys: [] as string[] },
@@ -760,9 +777,26 @@ async function seedRBAC() {
       isSystem: true,
       hasFullAccess: false,
       rank: 55,
-      permissionKeys: ["project.view_stats", "analytics.view", "policy.view_all"],
+      permissionKeys: [
+        "project.view_stats",
+        "task.view_stats",
+        "analytics.view",
+        "policy.view_all",
+        "finance.view",
+        "finance.create",
+        "finance.update",
+        "finance.delete",
+        "finance.export",
+      ],
     },
-    { slug: "sales", name: "Sales", isSystem: true, hasFullAccess: false, rank: 50, permissionKeys: [] as string[] },
+    {
+      slug: "sales",
+      name: "Sales",
+      isSystem: true,
+      hasFullAccess: false,
+      rank: 50,
+      permissionKeys: ["lead.view_all", "lead.view_stats", "lead.create", "lead.update", "finance.view"],
+    },
     {
       slug: "support",
       name: "Support",
@@ -807,6 +841,26 @@ async function seedRBAC() {
       ],
     },
     {
+      name: "Task Management",
+      description: "Task lifecycle, checklists, time tracking, and comments.",
+      permissionKeys: [
+        "task.view_stats",
+        "task.export",
+        "task.create",
+        "task.update",
+        "task.delete",
+        "task.bulk_update",
+        "task.bulk_delete",
+        "task.log_time",
+        "task.comment",
+      ],
+    },
+    {
+      name: "Lead Management",
+      description: "CRM lead pipeline, ownership, and stats.",
+      permissionKeys: ["lead.view_all", "lead.view_stats", "lead.create", "lead.update", "lead.delete"],
+    },
+    {
       name: "People Management",
       description: "Departments, branches, teams, holidays, and the user directory.",
       permissionKeys: [
@@ -827,8 +881,16 @@ async function seedRBAC() {
     },
     {
       name: "Financial Operations",
-      description: "Analytics and financial insight.",
-      permissionKeys: ["analytics.view", "analytics.export"],
+      description: "Analytics, financial insight, and finance record management.",
+      permissionKeys: [
+        "analytics.view",
+        "analytics.export",
+        "finance.view",
+        "finance.create",
+        "finance.update",
+        "finance.delete",
+        "finance.export",
+      ],
     },
     {
       name: "Automation",
@@ -895,6 +957,65 @@ async function seedRBAC() {
   await RoleModel.updateOne({ slug: "manager" }, { $addToSet: { permissionKeys: "user.view_all" } });
   await RoleModel.updateOne({ slug: "manager" }, { $addToSet: { permissionKeys: "user.edit" } });
   await RoleModel.updateOne({ slug: "hr" }, { $addToSet: { permissionKeys: "user.edit" } });
+  await RoleModel.updateOne({ slug: "manager" }, { $addToSet: { permissionKeys: "workflow.approve_step" } });
+
+  // Backfill Task permissions onto roles seeded before Task management existed.
+  await RoleModel.updateOne(
+    { slug: "manager" },
+    {
+      $addToSet: {
+        permissionKeys: {
+          $each: [
+            "project.comment",
+            "task.view_stats",
+            "task.export",
+            "task.create",
+            "task.update",
+            "task.delete",
+            "task.bulk_update",
+            "task.bulk_delete",
+            "task.log_time",
+            "task.comment",
+          ],
+        },
+      },
+    },
+  );
+  await RoleModel.updateOne({ slug: "hr" }, { $addToSet: { permissionKeys: "task.view_stats" } });
+  await RoleModel.updateOne({ slug: "finance" }, { $addToSet: { permissionKeys: "task.view_stats" } });
+  await RoleModel.updateOne(
+    { slug: "employee" },
+    { $addToSet: { permissionKeys: { $each: ["task.create", "task.update", "task.log_time", "task.comment"] } } },
+  );
+
+  // Backfill Lead permissions onto roles seeded before the CRM lead entity existed.
+  await RoleModel.updateOne(
+    { slug: "manager" },
+    {
+      $addToSet: {
+        permissionKeys: { $each: ["lead.view_all", "lead.view_stats", "lead.create", "lead.update", "lead.delete"] },
+      },
+    },
+  );
+  await RoleModel.updateOne(
+    { slug: "sales" },
+    {
+      $addToSet: {
+        permissionKeys: { $each: ["lead.view_all", "lead.view_stats", "lead.create", "lead.update"] },
+      },
+    },
+  );
+
+  // Backfill Finance permissions onto roles seeded before the Finance module existed.
+  await RoleModel.updateOne(
+    { slug: "finance" },
+    {
+      $addToSet: {
+        permissionKeys: { $each: ["finance.view", "finance.create", "finance.update", "finance.delete", "finance.export"] },
+      },
+    },
+  );
+  await RoleModel.updateOne({ slug: "sales" }, { $addToSet: { permissionKeys: "finance.view" } });
 
   for (const group of permissionGroups) {
     await PermissionGroupModel.updateOne(
@@ -1456,6 +1577,7 @@ async function seedDatabase() {
           passwordHash,
           isEmailVerified: true,
           isActive: true,
+          isProfileComplete: true,
         },
       },
       { upsert: true },

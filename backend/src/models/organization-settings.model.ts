@@ -8,6 +8,12 @@ export type DateFormat = (typeof dateFormats)[number];
 export type WorkspacePreferences = {
   allowRemoteCheckIn: boolean;
   enforceGeoFence: boolean;
+  officeLocation: {
+    name: string;
+    latitude: number;
+    longitude: number;
+    radiusMeters: number;
+  };
   defaultLeavePolicyNote?: string;
 };
 
@@ -95,7 +101,13 @@ const organizationSettingsSchema = new Schema<OrganizationSettings>(
     },
     workspacePreferences: {
       allowRemoteCheckIn: { type: Boolean, default: false },
-      enforceGeoFence: { type: Boolean, default: false },
+      enforceGeoFence: { type: Boolean, default: true },
+      officeLocation: {
+        name: { type: String, trim: true, maxlength: 120, default: "Main Office" },
+        latitude: { type: Number, min: -90, max: 90, default: 12.9716 },
+        longitude: { type: Number, min: -180, max: 180, default: 77.5946 },
+        radiusMeters: { type: Number, min: 1, default: 300 },
+      },
       defaultLeavePolicyNote: { type: String, trim: true, maxlength: 500 },
     },
     moduleAccess: {

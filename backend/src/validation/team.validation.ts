@@ -4,7 +4,7 @@ import { departmentStatuses } from "../constants/department.js";
 export const createTeamSchema = z.object({
   name: z.string().min(2).max(120),
   departmentId: z.string().min(1),
-  leadId: z.string().min(1).optional(),
+  leadId: z.string().min(1, "A team must have a lead"),
   memberIds: z.array(z.string().min(1)).default([]),
   description: z.string().max(1000).optional(),
   status: z.enum(departmentStatuses).default("Active"),

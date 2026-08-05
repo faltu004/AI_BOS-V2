@@ -5,9 +5,12 @@ import { authenticate } from "../middleware/auth.middleware.js";
 import { requirePermission } from "../middleware/rbac.middleware.js";
 import { validate } from "../middleware/validate.middleware.js";
 import {
+  approveExecutionSchema,
   createWorkflowSchema,
   duplicateWorkflowSchema,
   executeWorkflowSchema,
+  executionIdParamsSchema,
+  listExecutionsQuerySchema,
   listWorkflowsQuerySchema,
   updateWorkflowSchema,
   workflowIdParamsSchema,
@@ -60,4 +63,18 @@ workflowRoutes.patch(
 workflowRoutes.post(
   "/:id/execute",
   ...route(requirePermission("workflow.execute"), validate({ params: workflowIdParamsSchema, body: executeWorkflowSchema }), workflowController.execute),
+);
+
+workflowRoutes.get(
+  "/:id/executions",
+  ...route(validate({ params: workflowIdParamsSchema, query: listExecutionsQuerySchema }), workflowController.listExecutions),
+);
+
+workflowRoutes.post(
+  "/executions/:executionId/approve",
+  ...route(
+    requirePermission("workflow.approve_step"),
+    validate({ params: executionIdParamsSchema, body: approveExecutionSchema }),
+    workflowController.approveStep,
+  ),
 );

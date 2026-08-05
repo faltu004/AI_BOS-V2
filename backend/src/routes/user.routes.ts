@@ -4,7 +4,15 @@ import { asyncHandler } from "../middleware/async-handler.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 import { requirePermission } from "../middleware/rbac.middleware.js";
 import { validate } from "../middleware/validate.middleware.js";
-import { createUserSchema, updateEmployeeProfileSchema } from "../validation/user.validation.js";
+import {
+  changeManagerSchema,
+  changeRoleSchema,
+  completeProfileSchema,
+  createUserSchema,
+  moveDepartmentSchema,
+  updateEmployeeProfileSchema,
+  updateOwnProfileSchema,
+} from "../validation/user.validation.js";
 
 export const userRoutes = Router();
 
@@ -31,11 +39,10 @@ userRoutes.post(
 );
 
 userRoutes.patch(
-  "/:id",
+  "/me/profile",
   authenticate,
-  requirePermission("user.edit"),
-  validate({ body: updateEmployeeProfileSchema }),
-  asyncHandler(userController.updateProfile),
+  validate({ body: completeProfileSchema }),
+  asyncHandler(userController.completeOwnProfile),
 );
 
 userRoutes.get(
@@ -44,8 +51,54 @@ userRoutes.get(
   asyncHandler(userController.me),
 );
 
+userRoutes.patch(
+  "/me",
+  authenticate,
+  validate({ body: updateOwnProfileSchema }),
+  asyncHandler(userController.updateOwnProfile),
+);
+
 userRoutes.get(
   "/me/password-changes",
   authenticate,
   asyncHandler(userController.passwordChanges),
+);
+
+userRoutes.patch(
+  "/:id/department",
+  authenticate,
+  requirePermission("user.edit"),
+  validate({ body: moveDepartmentSchema }),
+  asyncHandler(userController.moveDepartment),
+);
+
+userRoutes.patch(
+  "/:id/manager",
+  authenticate,
+  requirePermission("user.edit"),
+  validate({ body: changeManagerSchema }),
+  asyncHandler(userController.changeManager),
+);
+
+userRoutes.patch(
+  "/:id/role",
+  authenticate,
+  requirePermission("user.edit"),
+  validate({ body: changeRoleSchema }),
+  asyncHandler(userController.changeRole),
+);
+
+userRoutes.patch(
+  "/:id",
+  authenticate,
+  requirePermission("user.edit"),
+  validate({ body: updateEmployeeProfileSchema }),
+  asyncHandler(userController.updateProfile),
+);
+
+userRoutes.delete(
+  "/:id",
+  authenticate,
+  requirePermission("user.edit"),
+  asyncHandler(userController.delete),
 );

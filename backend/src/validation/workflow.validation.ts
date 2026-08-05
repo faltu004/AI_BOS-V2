@@ -66,8 +66,22 @@ export const executeWorkflowSchema = z.object({
   inputPayload: z.record(z.string(), z.unknown()).optional(),
 });
 
+export const executionIdParamsSchema = z.object({
+  executionId: z.string().min(1),
+});
+
+export const approveExecutionSchema = z.object({
+  approved: z.boolean(),
+});
+
+export const listExecutionsQuerySchema = z.object({
+  limit: z.coerce.number().int().positive().max(100).default(20),
+});
+
 export type CreateWorkflowInput = z.infer<typeof createWorkflowSchema>;
 export type UpdateWorkflowInput = z.infer<typeof updateWorkflowSchema>;
 export type ListWorkflowsQuery = z.infer<typeof listWorkflowsQuerySchema>;
 export type DuplicateWorkflowInput = z.infer<typeof duplicateWorkflowSchema>;
 export type ExecuteWorkflowInput = z.infer<typeof executeWorkflowSchema>;
+export type ApproveExecutionInput = z.infer<typeof approveExecutionSchema>;
+export type ListExecutionsQuery = z.infer<typeof listExecutionsQuerySchema>;

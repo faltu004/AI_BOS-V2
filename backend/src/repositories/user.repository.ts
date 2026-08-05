@@ -5,14 +5,23 @@ export type CreateUserInput = Pick<
   User,
   "fullName" | "companyName" | "email" | "passwordHash" | "role"
 > &
-  Partial<Pick<User, "organizationId" | "employeeProfile">> & {
+  Partial<Pick<User, "organizationId" | "employeeProfile" | "isProfileComplete">> & {
     /** Mongoose casts a valid hex string to ObjectId automatically on create. */
     departmentId?: string;
+    branchId?: string;
+    managerId?: string;
+    teamIds?: string[];
   };
 
 export type UpdateEmployeeProfileInput = {
+  fullName?: string;
+  avatar?: string | null;
   departmentId?: string;
+  branchId?: string;
+  managerId?: string;
+  teamIds?: string[];
   employeeProfile?: EmployeeProfile;
+  isProfileComplete?: boolean;
 };
 
 export class UserRepository {
@@ -41,23 +50,60 @@ export class UserRepository {
   }
 
   async findMany(filter: FilterQuery<User> = {}) {
-    return UserModel.find(filter).populate("departmentId", "name").sort({ createdAt: -1 });
+    return UserModel.find(filter).populate("departmentId", "name").populate("managerId", "fullName email role").sort({ createdAt: -1 });
+  }
+
+  async deactivate(id: string) {
+    return UserModel.findByIdAndUpdate(
+      id,
+      {
+        $set: {
+          isActive: false,
+          "employeeProfile.employmentStatus": "Inactive",
+        },
+      },
+      { new: true, runValidators: true },
+    ).populate("departmentId", "name").populate("managerId", "fullName email role");
   }
 
   async updateEmployeeProfile(id: string, updates: UpdateEmployeeProfileInput) {
     const setFields: Record<string, unknown> = {};
+    if (updates.fullName !== undefined) {
+      setFields.fullName = updates.fullName;
+    }
+    if (updates.avatar !== undefined) {
+      setFields.avatar = updates.avatar;
+    }
     if (updates.departmentId !== undefined) {
       setFields.departmentId = updates.departmentId;
+    }
+    if (updates.branchId !== undefined) {
+      setFields.branchId = updates.branchId;
+    }
+    if (updates.managerId !== undefined) {
+      setFields.managerId = updates.managerId;
+    }
+    if (updates.teamIds !== undefined) {
+      setFields.teamIds = updates.teamIds;
     }
     if (updates.employeeProfile !== undefined) {
       for (const [key, value] of Object.entries(updates.employeeProfile)) {
         setFields[`employeeProfile.${key}`] = value;
       }
     }
+    if (updates.isProfileComplete !== undefined) {
+      setFields.isProfileComplete = updates.isProfileComplete;
+    }
     return UserModel.findByIdAndUpdate(id, { $set: setFields }, { new: true, runValidators: true }).populate(
       "departmentId",
       "name",
-    );
+    ).populate("managerId", "fullName email role");
+  }
+
+  async updateRole(id: string, role: string) {
+    return UserModel.findByIdAndUpdate(id, { $set: { role } }, { new: true, runValidators: true })
+      .populate("departmentId", "name")
+      .populate("managerId", "fullName email role");
   }
 
   async existsWithFilter(filter: FilterQuery<User>) {

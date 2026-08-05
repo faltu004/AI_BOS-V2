@@ -7,6 +7,7 @@ import { validate } from "../middleware/validate.middleware.js";
 import {
   createDepartmentSchema,
   departmentIdParamsSchema,
+  departmentMembersParamsSchema,
   listDepartmentsQuerySchema,
   updateDepartmentSchema,
 } from "../validation/department.validation.js";
@@ -27,6 +28,11 @@ departmentRoutes.post(
     validate({ body: createDepartmentSchema }),
     departmentController.create,
   ),
+);
+
+departmentRoutes.get(
+  "/:id/members",
+  ...route(validate({ params: departmentMembersParamsSchema }), departmentController.members),
 );
 
 departmentRoutes.get(

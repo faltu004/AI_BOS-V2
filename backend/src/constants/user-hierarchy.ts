@@ -12,6 +12,12 @@ export const assignableRolesByRole: Partial<Record<UserRole, UserRole[]>> = {
   HR: ["Employee", "Sales"],
 };
 
+function normalizeCreatorRole(role: string): string {
+  if (role === "CEO") return "Owner";
+  if (role === "Admin") return "Administrator";
+  return role;
+}
+
 export function getAssignableRoles(creatorRole: string): UserRole[] {
-  return assignableRolesByRole[creatorRole as UserRole] ?? [];
+  return assignableRolesByRole[normalizeCreatorRole(creatorRole) as UserRole] ?? [];
 }

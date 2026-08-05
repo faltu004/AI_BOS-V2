@@ -5,29 +5,29 @@ import { registerSW } from "virtual:pwa-register";
 let updateServiceWorker: ((reloadPage?: boolean) => Promise<void>) | null = null;
 
 export function usePwaUpdate() {
-  const [needsRefresh, setNeedsRefresh] = useState(false);
-  const [offlineReady, setOfflineReady] = useState(false);
+ const [needsRefresh, setNeedsRefresh] = useState(false);
+ const [offlineReady, setOfflineReady] = useState(false);
 
-  useEffect(() => {
-    if (updateServiceWorker) return;
-    updateServiceWorker = registerSW({
-      immediate: true,
-      onNeedRefresh() {
-        setNeedsRefresh(true);
-      },
-      onOfflineReady() {
-        setOfflineReady(true);
-      },
-    });
-  }, []);
+ useEffect(() => {
+ if (updateServiceWorker) return;
+ updateServiceWorker = registerSW({
+ immediate: true,
+ onNeedRefresh() {
+ setNeedsRefresh(true);
+ },
+ onOfflineReady() {
+ setOfflineReady(true);
+ },
+ });
+ }, []);
 
-  const applyUpdate = useCallback(async () => {
-    if (!updateServiceWorker) return;
-    await updateServiceWorker(true);
-    setNeedsRefresh(false);
-  }, []);
+ const applyUpdate = useCallback(async () => {
+ if (!updateServiceWorker) return;
+ await updateServiceWorker(true);
+ setNeedsRefresh(false);
+ }, []);
 
-  const dismissOfflineReady = useCallback(() => setOfflineReady(false), []);
+ const dismissOfflineReady = useCallback(() => setOfflineReady(false), []);
 
-  return { needsRefresh, offlineReady, applyUpdate, dismissOfflineReady };
+ return { needsRefresh, offlineReady, applyUpdate, dismissOfflineReady };
 }

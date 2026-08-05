@@ -41,6 +41,18 @@ export class ProjectController {
     projectService.bulkUpdate(req.body, req.user?.id),
   );
 
+  listMembers = jsonController(200, "Project members fetched successfully", ({ req }) =>
+    projectService.listMembers(req.params.id),
+  );
+
+  upsertMember = jsonController(200, "Project member saved successfully", ({ req }) =>
+    projectService.upsertMember(req.params.id, req.body, req.user?.id),
+  );
+
+  removeMember = jsonController(200, "Project member removed successfully", ({ req }) =>
+    projectService.removeMember(req.params.id, req.params.userId),
+  );
+
   exportCsv = fileController("text/csv", "attachment; filename=projects.csv", ({ req }) =>
     projectService.exportCsv(req.query as unknown as ListProjectsQuery),
   );

@@ -9,8 +9,10 @@ export type PublicUser = {
   companyName: string;
   email: string;
   role: string;
+  avatar?: string;
   isEmailVerified: boolean;
   isActive: boolean;
+  isProfileComplete: boolean;
   lastLoginAt?: Date;
   createdAt: Date;
   updatedAt: Date;

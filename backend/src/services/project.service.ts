@@ -1,5 +1,7 @@
 import type { Types } from "mongoose";
+import { projectMemberRepository } from "../repositories/project-member.repository.js";
 import { projectRepository } from "../repositories/project.repository.js";
+import { userRepository } from "../repositories/user.repository.js";
 import { AppError } from "../utils/app-error.js";
 import { toCsv } from "../utils/csv.js";
 import { createSimplePdfBuffer } from "../utils/pdf.js";
@@ -10,10 +12,26 @@ import type {
   CreateProjectInput,
   ListProjectsQuery,
   UpdateProjectInput,
+  UpsertProjectMemberInput,
 } from "../validation/project.validation.js";
 
 function normalizeTags(tags: string[]) {
   return [...new Set(tags.map((tag) => tag.trim().toLowerCase()).filter(Boolean))];
+}
+
+function normalizeEpics(input: CreateProjectInput["epics"] | UpdateProjectInput["epics"] = []) {
+  return input.map((epic) => ({
+    ...epic,
+    _id: epic._id as unknown as Types.ObjectId,
+    ownerId: epic.ownerId as unknown as Types.ObjectId,
+  }));
+}
+
+function normalizeSprints(input: CreateProjectInput["sprints"] | UpdateProjectInput["sprints"] = []) {
+  return input.map((sprint) => ({
+    ...sprint,
+    _id: sprint._id as unknown as Types.ObjectId,
+  }));
 }
 
 async function createUniqueProjectCode() {
@@ -33,14 +51,22 @@ export class ProjectService {
   async create(input: CreateProjectInput, userId?: string) {
     const projectCode = await createUniqueProjectCode();
 
-    return projectRepository.create({
+    const project = await projectRepository.create({
       ...input,
       projectCode,
       tags: normalizeTags(input.tags),
+      epics: normalizeEpics(input.epics),
+      sprints: normalizeSprints(input.sprints),
       isArchived: input.status === "Archived",
       createdBy: userId as unknown as Types.ObjectId,
       updatedBy: userId as unknown as Types.ObjectId,
     });
+
+    if (userId) {
+      await projectMemberRepository.upsert(project._id as Types.ObjectId, userId, "Owner", userId);
+    }
+
+    return project;
   }
 
   async list(query: ListProjectsQuery) {
@@ -61,6 +87,8 @@ export class ProjectService {
     const updates = {
       ...input,
       ...(input.tags ? { tags: normalizeTags(input.tags) } : {}),
+      ...(input.epics ? { epics: normalizeEpics(input.epics) } : {}),
+      ...(input.sprints ? { sprints: normalizeSprints(input.sprints) } : {}),
       ...(input.status ? { isArchived: input.status === "Archived" } : {}),
       updatedBy: userId,
     };
@@ -81,6 +109,7 @@ export class ProjectService {
       throw new AppError("Project not found", 404);
     }
 
+    await projectMemberRepository.deleteByProjects([id]);
     return { deleted: true };
   }
 
@@ -108,6 +137,8 @@ export class ProjectService {
       teamMembers: project.teamMembers,
       projectManager: project.projectManager,
       attachments: project.attachments,
+      epics: project.epics,
+      sprints: project.sprints,
       notes: project.notes,
       tags: project.tags,
       isArchived: false,
@@ -118,7 +149,42 @@ export class ProjectService {
 
   async bulkDelete(input: BulkDeleteProjectsInput) {
     const result = await projectRepository.bulkDelete(input.ids);
+    await projectMemberRepository.deleteByProjects(input.ids);
     return { deletedCount: result.deletedCount };
+  }
+
+  async listMembers(projectId: string) {
+    const project = await projectRepository.findById(projectId);
+    if (!project) {
+      throw new AppError("Project not found", 404);
+    }
+
+    return projectMemberRepository.listByProject(projectId);
+  }
+
+  async upsertMember(projectId: string, input: UpsertProjectMemberInput, actorUserId?: string) {
+    const [project, user] = await Promise.all([
+      projectRepository.findById(projectId),
+      userRepository.findById(input.userId),
+    ]);
+
+    if (!project) {
+      throw new AppError("Project not found", 404);
+    }
+    if (!user || !user.isActive) {
+      throw new AppError("User not found", 404);
+    }
+
+    return projectMemberRepository.upsert(projectId, input.userId, input.role, actorUserId);
+  }
+
+  async removeMember(projectId: string, userId: string) {
+    const removed = await projectMemberRepository.remove(projectId, userId);
+    if (!removed) {
+      throw new AppError("Project member not found", 404);
+    }
+
+    return { removed: true };
   }
 
   async bulkUpdate(input: BulkUpdateProjectsInput, userId?: string) {

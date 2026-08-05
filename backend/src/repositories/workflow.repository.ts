@@ -108,7 +108,6 @@ export class WorkflowRepository {
       paused: stats?.paused ?? 0,
       templates: stats?.templates ?? 0,
       totalExecutions: stats?.totalExecutions ?? 0,
-      recentExecutions: 0,
     };
   }
 }

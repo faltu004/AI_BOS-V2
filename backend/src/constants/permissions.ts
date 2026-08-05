@@ -6,6 +6,9 @@ export type PermissionModule =
   | "Holiday"
   | "Approval"
   | "Project"
+  | "Task"
+  | "Lead"
+  | "Finance"
   | "Workflow"
   | "Document"
   | "Analytics"
@@ -67,6 +70,32 @@ export const permissionCatalog: PermissionCatalogEntry[] = [
   { key: "project.bulk_delete", module: "Project", label: "Bulk delete projects", description: "Remove multiple projects at once." },
   { key: "project.archive", module: "Project", label: "Archive project", description: "Archive a project." },
   { key: "project.duplicate", module: "Project", label: "Duplicate project", description: "Duplicate an existing project." },
+
+  // Task
+  { key: "task.view_stats", module: "Task", label: "View task stats", description: "View aggregate task statistics." },
+  { key: "task.export", module: "Task", label: "Export tasks", description: "Export task lists as CSV/PDF." },
+  { key: "task.create", module: "Task", label: "Create task", description: "Create new tasks." },
+  { key: "task.update", module: "Task", label: "Update task", description: "Edit tasks, including status, checklist, and assignment." },
+  { key: "task.delete", module: "Task", label: "Delete task", description: "Remove tasks." },
+  { key: "task.bulk_update", module: "Task", label: "Bulk update tasks", description: "Update multiple tasks at once." },
+  { key: "task.bulk_delete", module: "Task", label: "Bulk delete tasks", description: "Remove multiple tasks at once." },
+  { key: "task.log_time", module: "Task", label: "Log time on task", description: "Log time entries against a task." },
+  { key: "task.comment", module: "Task", label: "Comment on task", description: "Post comments on a task." },
+  { key: "project.comment", module: "Project", label: "Comment on project", description: "Post comments on a project." },
+
+  // Lead
+  { key: "lead.view_all", module: "Lead", label: "View leads", description: "View the CRM lead list and lead details." },
+  { key: "lead.view_stats", module: "Lead", label: "View lead stats", description: "View aggregate lead/pipeline statistics." },
+  { key: "lead.create", module: "Lead", label: "Create lead", description: "Create new CRM leads." },
+  { key: "lead.update", module: "Lead", label: "Update lead", description: "Edit leads, including status and owner assignment." },
+  { key: "lead.delete", module: "Lead", label: "Delete lead", description: "Remove CRM leads." },
+
+  // Finance
+  { key: "finance.view", module: "Finance", label: "View finance records", description: "View income, expenses, invoices, payments, taxes, and budgets." },
+  { key: "finance.create", module: "Finance", label: "Create finance records", description: "Record income/expense entries, generate invoices, log payments, taxes, and budgets." },
+  { key: "finance.update", module: "Finance", label: "Update finance records", description: "Edit finance records and update invoice status." },
+  { key: "finance.delete", module: "Finance", label: "Delete finance records", description: "Remove finance records." },
+  { key: "finance.export", module: "Finance", label: "Export finance records", description: "Export finance data and invoices." },
 
   // Workflow
   { key: "workflow.view_stats", module: "Workflow", label: "View workflow stats", description: "View aggregate workflow statistics." },

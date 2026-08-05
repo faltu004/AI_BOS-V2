@@ -15,6 +15,25 @@ export type ProjectAttachment = {
   size?: number;
 };
 
+export type ProjectEpic = {
+  _id?: Types.ObjectId;
+  title: string;
+  description?: string;
+  status: "Planned" | "In Progress" | "Done";
+  ownerId?: Types.ObjectId;
+  startDate?: Date;
+  targetDate?: Date;
+};
+
+export type ProjectSprint = {
+  _id?: Types.ObjectId;
+  name: string;
+  goal?: string;
+  status: "Planned" | "Active" | "Closed";
+  startDate: Date;
+  endDate: Date;
+};
+
 export type Project = {
   projectName: string;
   projectCode: string;
@@ -31,6 +50,8 @@ export type Project = {
   teamMembers: string[];
   projectManager: string;
   attachments: ProjectAttachment[];
+  epics: ProjectEpic[];
+  sprints: ProjectSprint[];
   notes?: string;
   tags: string[];
   isArchived: boolean;
@@ -52,6 +73,23 @@ const attachmentSchema = new Schema<ProjectAttachment>(
   { _id: false },
 );
 
+const epicSchema = new Schema<ProjectEpic>({
+  title: { type: String, required: true, trim: true, maxlength: 180 },
+  description: { type: String, trim: true, maxlength: 1500 },
+  status: { type: String, enum: ["Planned", "In Progress", "Done"], default: "Planned", index: true },
+  ownerId: { type: Schema.Types.ObjectId, ref: "User" },
+  startDate: { type: Date },
+  targetDate: { type: Date },
+});
+
+const sprintSchema = new Schema<ProjectSprint>({
+  name: { type: String, required: true, trim: true, maxlength: 120 },
+  goal: { type: String, trim: true, maxlength: 1000 },
+  status: { type: String, enum: ["Planned", "Active", "Closed"], default: "Planned", index: true },
+  startDate: { type: Date, required: true },
+  endDate: { type: Date, required: true },
+});
+
 const projectSchema = new Schema<Project>(
   {
     projectName: { type: String, required: true, trim: true, maxlength: 180, index: true },
@@ -69,6 +107,8 @@ const projectSchema = new Schema<Project>(
     teamMembers: [{ type: String, trim: true }],
     projectManager: { type: String, required: true, trim: true, maxlength: 120, index: true },
     attachments: { type: [attachmentSchema], default: [] },
+    epics: { type: [epicSchema], default: [] },
+    sprints: { type: [sprintSchema], default: [] },
     notes: { type: String, trim: true, maxlength: 5000 },
     tags: [{ type: String, trim: true, lowercase: true, index: true }],
     isArchived: { type: Boolean, default: false, index: true },
