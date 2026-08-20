@@ -19,6 +19,14 @@ export type Attendance = {
   checkOutLocation?: AttendanceLocation;
   checkInFaceImage?: string;
   checkOutFaceImage?: string;
+  checkInFaceVerified?: boolean;
+  checkOutFaceVerified?: boolean;
+  checkInLivenessPassed?: boolean;
+  checkOutLivenessPassed?: boolean;
+  checkInFaceEnrollmentId?: Types.ObjectId;
+  checkOutFaceEnrollmentId?: Types.ObjectId;
+  checkInVerificationModelVersion?: string;
+  checkOutVerificationModelVersion?: string;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -46,6 +54,14 @@ const attendanceSchema = new Schema<Attendance>(
     checkOutLocation: { type: attendanceLocationSchema },
     checkInFaceImage: { type: String },
     checkOutFaceImage: { type: String },
+    checkInFaceVerified: { type: Boolean, default: false },
+    checkOutFaceVerified: { type: Boolean, default: false },
+    checkInLivenessPassed: { type: Boolean, default: false },
+    checkOutLivenessPassed: { type: Boolean, default: false },
+    checkInFaceEnrollmentId: { type: Schema.Types.ObjectId, ref: "FaceEnrollment" },
+    checkOutFaceEnrollmentId: { type: Schema.Types.ObjectId, ref: "FaceEnrollment" },
+    checkInVerificationModelVersion: { type: String, trim: true, maxlength: 80 },
+    checkOutVerificationModelVersion: { type: String, trim: true, maxlength: 80 },
   },
   {
     timestamps: true,

@@ -1,12 +1,16 @@
+import { useMemo } from "react";
 import { Navigate } from "react-router-dom";
 import { AnimatedAppRoutes, AppProviders, lazyNamed, type AppRouteConfig } from "@shared/platform/AppShell";
 import { workspaceSearchItems, quickCreateActions } from "@/data/workspace";
+import {
+  AdministratorMonitoringAccessProvider,
+  useAdministratorMonitoringAccess,
+} from "@/admin/features/administrator-access/AdministratorMonitoringAccessContext";
 
 const adminRoles = ["Administrator", "Owner"] as const;
-const adminManagerRoles = ["Administrator", "Owner", "Manager"] as const;
 
 const LoginPage = lazyNamed(() => import("@/features/auth/login"), "LoginPage");
-const ForgotPasswordPage = lazyNamed(() => import("@/features/auth/pages/ForgotPasswordPage"), "ForgotPasswordPage");
+const ForgotPasswordPage = lazyNamed(() => import("@/features/auth/pages/ForgotPasswordPage"),"ForgotPasswordPage");
 const ResetPasswordPage = lazyNamed(() => import("@/features/auth/pages/ResetPasswordPage"), "ResetPasswordPage");
 const EmailVerificationPage = lazyNamed(() => import("@/features/auth/pages/EmailVerificationPage"), "EmailVerificationPage");
 const AdminDashboardPage = lazyNamed(() => import("@/common/features/dashboard"), "AdminDashboardPage");
@@ -21,6 +25,8 @@ const IntegrationsCenterPage = lazyNamed(() => import("@/admin/features/integrat
 const AuditBackupPage = lazyNamed(() => import("@/admin/features/audit-backup"), "AuditBackupPage");
 const SecurityDashboardPage = lazyNamed(() => import("@/admin/features/security"), "SecurityDashboardPage");
 const MonitoringDashboardPage = lazyNamed(() => import("@/admin/features/monitoring"), "MonitoringDashboardPage");
+const DeviceDetailsPage = lazyNamed(() => import("@/admin/features/monitoring"), "DeviceDetailsPage");
+const SoftwareCatalogPage = lazyNamed(() => import("@/admin/features/monitoring"), "SoftwareCatalogPage");
 const AnalyticsPage = lazyNamed(() => import("@/common/features/analytics"), "AnalyticsPage");
 const ProjectsPage = lazyNamed(() => import("@/manager/features/projects"), "ProjectsPage");
 const ProjectDetailsPage = lazyNamed(() => import("@/manager/features/projects"), "ProjectDetailsPage");
@@ -30,42 +36,84 @@ const MeetingsPage = lazyNamed(() => import("@/manager/features/meetings"), "Mee
 const EmployeesPage = lazyNamed(() => import("@/manager/features/employees"), "EmployeesPage");
 const ProfilePage = lazyNamed(() => import("@shared/profile/RoleProfilePage"), "RoleProfilePage");
 const CompleteProfilePage = lazyNamed(() => import("@shared/profile/CompleteProfilePage"), "CompleteProfilePage");
+const ChangePasswordRequiredPage = lazyNamed(() => import("@shared/auth/pages/ChangePasswordRequiredPage"), "ChangePasswordRequiredPage");
+const FirstOwnerSetupPage = lazyNamed(() => import("@/admin/features/account-security/FirstOwnerSetupPage"), "FirstOwnerSetupPage");
+const AccountSecurityPage = lazyNamed(() => import("@/admin/features/account-security/AccountSecurityPage"), "AccountSecurityPage");
+const AdministratorAccessPage = lazyNamed(() => import("@/admin/features/administrator-access"), "AdministratorAccessPage");
+const MonitoringAccessGate = lazyNamed(() => import("@/admin/features/administrator-access"), "MonitoringAccessGate");
 
 const routes: AppRouteConfig[] = [
- { path: "/", element: <Navigate replace to="/login" /> },
- { path: "/login", element: <LoginPage /> },
- { path: "/forgot-password", element: <ForgotPasswordPage /> },
- { path: "/reset-password", element: <ResetPasswordPage /> },
- { path: "/reset-password/:token", element: <ResetPasswordPage /> },
- { path: "/verify-email", element: <EmailVerificationPage /> },
- { path: "/verify-email/:token", element: <EmailVerificationPage /> },
- { path: "/complete-profile", element: <CompleteProfilePage />, allowedRoles: adminManagerRoles },
- { path: "/dashboard", element: <AdminDashboardPage />, allowedRoles: adminManagerRoles },
- { path: "/profile", element: <ProfilePage />, allowedRoles: adminManagerRoles },
- { path: "/admin", element: <AdminAccessGate><AdminPage /></AdminAccessGate>, allowedRoles: adminRoles },
- { path: "/admin/organization", element: <OrganizationPage />, allowedRoles: adminRoles },
- { path: "/admin/rbac", element: <RBACPage />, allowedRoles: adminRoles },
- { path: "/settings", element: <SettingsPage />, allowedRoles: adminRoles },
- { path: "/integrations", element: <IntegrationsCenterPage />, allowedRoles: adminRoles },
- { path: "/analytics", element: <AnalyticsPage />, allowedRoles: adminManagerRoles },
- { path: "/projects", element: <ProjectsPage />, allowedRoles: adminManagerRoles },
- { path: "/projects/:id", element: <ProjectDetailsPage />, allowedRoles: adminManagerRoles },
- { path: "/workflows", element: <WorkflowsPage />, allowedRoles: adminManagerRoles },
- { path: "/tasks", element: <TasksPage />, allowedRoles: adminManagerRoles },
- { path: "/meetings", element: <MeetingsPage />, allowedRoles: adminManagerRoles },
- { path: "/employees", element: <EmployeesPage />, allowedRoles: adminManagerRoles },
- { path: "/messenger", element: <CollaborationHubPage />, allowedRoles: adminManagerRoles },
- { path: "/collaboration", element: <CollaborationHubPage />, allowedRoles: adminManagerRoles },
- { path: "/notifications", element: <NotificationCenterPage />, allowedRoles: adminManagerRoles },
- { path: "/audit-backup", element: <AuditBackupPage />, allowedRoles: adminRoles },
- { path: "/security", element: <SecurityDashboardPage />, allowedRoles: adminRoles },
- { path: "/monitoring", element: <MonitoringDashboardPage />, allowedRoles: adminRoles },
+  { path: "/", element: <Navigate replace to="/login" /> },
+  { path: "/login", element: <LoginPage /> },
+  { path: "/forgot-password", element: <ForgotPasswordPage /> },
+  { path: "/reset-password", element: <ResetPasswordPage /> },
+  { path: "/reset-password/:token", element: <ResetPasswordPage /> },
+  { path: "/verify-email", element: <EmailVerificationPage /> },
+  { path: "/verify-email/:token", element: <EmailVerificationPage /> },
+  { path: "/first-owner-setup", element: <FirstOwnerSetupPage /> },
+  { path: "/change-password-required", element: <ChangePasswordRequiredPage />, allowedRoles: adminRoles },
+  { path: "/complete-profile", element: <CompleteProfilePage />, allowedRoles: adminRoles },
+  { path: "/dashboard", element: <AdminDashboardPage />, allowedRoles: adminRoles },
+  { path: "/profile", element: <ProfilePage />, allowedRoles: adminRoles },
+  { path: "/admin", element: <AdminAccessGate><AdminPage /></AdminAccessGate>, allowedRoles: adminRoles },
+  { path: "/admin/organization", element: <OrganizationPage />, allowedRoles: adminRoles },
+  { path: "/admin/rbac", element: <RBACPage />, allowedRoles: adminRoles },
+  { path: "/settings", element: <SettingsPage />, allowedRoles: adminRoles },
+  { path: "/account-security", element: <AccountSecurityPage />, allowedRoles: adminRoles },
+  { path: "/settings/administrator-access", element: <AdministratorAccessPage />, allowedRoles: ["Owner"], allowFullAccessBypass: false },
+  { path: "/integrations", element: <IntegrationsCenterPage />, allowedRoles: adminRoles },
+  { path: "/analytics", element: <AnalyticsPage />, allowedRoles: adminRoles },
+  { path: "/projects", element: <ProjectsPage />, allowedRoles: adminRoles },
+  { path: "/projects/:id", element: <ProjectDetailsPage />, allowedRoles: adminRoles },
+  { path: "/workflows", element: <WorkflowsPage />, allowedRoles: adminRoles },
+  { path: "/tasks", element: <TasksPage />, allowedRoles: adminRoles },
+  { path: "/meetings", element: <MeetingsPage />, allowedRoles: adminRoles },
+  { path: "/employees", element: <EmployeesPage />, allowedRoles: adminRoles },
+  { path: "/messenger", element: <CollaborationHubPage />, allowedRoles: adminRoles },
+  { path: "/collaboration", element: <CollaborationHubPage />, allowedRoles: adminRoles },
+  { path: "/notifications", element: <NotificationCenterPage />, allowedRoles: adminRoles },
+  { path: "/audit-backup", element: <AuditBackupPage />, allowedRoles: adminRoles },
+  { path: "/security", element: <SecurityDashboardPage />, allowedRoles: adminRoles },
+  { path: "/monitoring", element: <MonitoringAccessGate><MonitoringDashboardPage /></MonitoringAccessGate>, allowedRoles: adminRoles },
+  { path: "/monitoring/devices/:deviceId", element: <MonitoringAccessGate><DeviceDetailsPage /></MonitoringAccessGate>, allowedRoles: adminRoles },
+  { path: "/monitoring/software-catalog", element: <MonitoringAccessGate><SoftwareCatalogPage /></MonitoringAccessGate>, allowedRoles: adminRoles },
 ];
 
+function AdminAppExperience() {
+  const {
+    hasPermission,
+  } =
+    useAdministratorMonitoringAccess();
+
+  const visibleSearchItems =
+    useMemo(
+      () =>
+        hasPermission(
+          "device.monitoring.view",
+        )
+          ? workspaceSearchItems
+          : workspaceSearchItems.filter(
+              (item) =>
+                item.id !==
+                "nav-monitoring",
+            ),
+      [hasPermission],
+    );
+
+  return (
+    <AppProviders
+      quickCreateActions={quickCreateActions}
+      searchItems={visibleSearchItems}
+    >
+      <AnimatedAppRoutes routes={routes} />
+    </AppProviders>
+  );
+}
+
 export default function App() {
- return (
- <AppProviders quickCreateActions={quickCreateActions} searchItems={workspaceSearchItems}>
- <AnimatedAppRoutes routes={routes} />
- </AppProviders>
- );
+  return (
+    <AdministratorMonitoringAccessProvider>
+      <AdminAppExperience />
+    </AdministratorMonitoringAccessProvider>
+  );
 }

@@ -13,9 +13,9 @@ import type {
  Team,
  TeamFormInput,
 } from "./organization.schema";
+import { getApiBaseUrl } from "@shared/lib/env";
 
-const viteEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
-const apiBaseUrl = viteEnv?.VITE_API_BASE_URL ?? "http://127.0.0.1:5000/api/v1";
+const apiBaseUrl = getApiBaseUrl();
 
 type ApiEnvelope<T> = {
  success: boolean;
@@ -52,7 +52,7 @@ export function fetchOrganization(token?: string) {
  return request<OrganizationForm & { _id: string }>("/organization", token);
 }
 
-export function saveOrganization(input: OrganizationForm, token?: string) {
+export function saveOrganization(input: Partial<OrganizationForm>, token?: string) {
  return request<OrganizationForm & { _id: string }>("/organization", token, {
  method: "PATCH",
  body: JSON.stringify(input),

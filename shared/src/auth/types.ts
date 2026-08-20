@@ -7,7 +7,16 @@ export type JwtReadySession = {
  refreshToken: string;
  tokenType: "Bearer";
  expiresIn: number;
- user: { email: string; role: AuthRole; fullName: string; isProfileComplete: boolean; avatar?: string };
+ user: {
+ email: string;
+ role: AuthRole;
+ fullName: string;
+ companyName?: string;
+ isProfileComplete: boolean;
+ mustChangePassword: boolean;
+ hasActiveFaceEnrollment?: boolean;
+ avatar?: string;
+ };
 };
 
 /** Decodes a JWT's payload without verifying its signature — only for reading claims like `exp` client-side. */

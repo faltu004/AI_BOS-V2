@@ -1,6 +1,7 @@
 import { AlertTriangle, Database, Download, FileText, HardDrive, History, Play, RefreshCw, Save } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getStoredAuthSession } from "@shared/auth/auth-service";
+import { getApiBaseUrl } from "@shared/lib/env";
 import { cn } from "@shared/lib/utils";
 import { formatDateTime } from "@shared/lib/utils-helpers";
 import { Button } from "@shared/ui/button";
@@ -27,9 +28,6 @@ import {
  type BackupType,
 } from "./audit-backup.schema";
 
-const viteEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
-const apiBaseUrl = viteEnv?.VITE_API_BASE_URL ?? "http://127.0.0.1:5000/api/v1";
-
 const backupTypeLabels: Record<BackupType, string> = {
  database: "Database",
  documents: "Documents",
@@ -54,6 +52,7 @@ export function AuditBackupPage() {
  const { confirm } = useConfirm();
  const session = useMemo(() => getStoredAuthSession(), []);
  const token = session?.accessToken;
+ const apiBaseUrl = getApiBaseUrl();
 
  const [tab, setTab] = useState<"audit" | "backup">("audit");
 

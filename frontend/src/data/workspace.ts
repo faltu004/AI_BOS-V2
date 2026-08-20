@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import type { QuickCreateAction, WorkspaceSearchItem } from "@shared/platform/types";
 
-export const frontlineRoles = ["Employee", "HR", "Finance", "Sales", "Support", "Developer", "Guest"] as const;
+export const frontlineRoles = ["Manager", "Employee", "HR", "Finance", "Sales", "Support", "Developer", "Guest"] as const;
 export const hrRoles = ["HR"] as const;
 export const salesRoles = ["Sales"] as const;
 export const financeRoles = ["Finance", "Sales"] as const;

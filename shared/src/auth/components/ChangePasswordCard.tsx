@@ -26,7 +26,7 @@ const changePasswordFormSchema = z
 
 type ChangePasswordFormValues = z.infer<typeof changePasswordFormSchema>;
 
-export function ChangePasswordCard() {
+export function ChangePasswordCard({ onChanged }: { onChanged?: () => void | Promise<void> }) {
  const { toast } = useToast();
  const {
  formState: { errors, isSubmitting },
@@ -44,6 +44,7 @@ export function ChangePasswordCard() {
  await changePassword(values.currentPassword, values.newPassword);
  toast({ title: "Password changed", description: "Use your new password next time you sign in.", type: "success" });
  reset();
+ await onChanged?.();
  } catch (error) {
  const message = (error as Error).message;
  if (message.toLowerCase().includes("current password")) {

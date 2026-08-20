@@ -99,6 +99,8 @@ export type MonitoringAlert = {
   description: string;
   source: string;
   acknowledgedAt?: string;
+  acknowledgedBy?: string;
+  acknowledgedByName?: string;
   resolvedAt?: string;
   createdAt: string;
 };
@@ -109,4 +111,15 @@ export type MonitoringReport = {
   title: string;
   date: string;
   downloadUrl: string;
+};
+
+export type MonitoringIncidentReport = {
+  _id: string;
+  type: "incident";
+  title: string;
+  deviceId: string;
+  condition: string;
+  openedAt: string;
+  resolvedAt: string;
+  durationSeconds: number;
 };

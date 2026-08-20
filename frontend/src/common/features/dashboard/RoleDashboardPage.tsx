@@ -5,14 +5,16 @@ import {
  CheckSquare,
  ContactRound,
  FileText,
+ ShieldCheck,
  Package,
  UserRound,
  UsersRound,
  WalletCards,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getStoredAuthSession } from "@shared/auth/auth-service";
-import type { AuthRole } from "@shared/auth/types";
+import { Link } from "react-router-dom";
+import { authSessionChangedEvent, getStoredAuthSession } from "@shared/auth/auth-service";
+import type { AuthRole, JwtReadySession } from "@shared/auth/types";
 import {
  fetchLeadStats,
  fetchOrgCounts,
@@ -27,6 +29,8 @@ import {
 } from "@shared/platform/ProfessionalDashboard";
 import { liveSyncIntervalMs, sharedDataChangedEvent } from "@shared/realtime/data-sync";
 import { DashboardPage as FullAccessDashboard } from "./DashboardPage";
+import { Button } from "@shared/ui/button";
+import { Card, CardContent } from "@shared/ui/card";
 
 const commonNav = [
  {
@@ -217,8 +221,86 @@ function isFrontlineRole(role?: AuthRole): role is FrontlineDashboardRole {
  return role === "Employee" || role === "HR" || role === "Finance" || role === "Sales" || role === "Support" || role === "Developer" || role === "Guest";
 }
 
+function SetupStatus({ complete }: { complete: boolean }) {
+ return (
+ <span className={["rounded-md px-2.5 py-1 text-xs font-semibold", complete ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/10 text-amber-700 dark:text-amber-300"].join(" ")}>
+ {complete ? "Done" : "Needed"}
+ </span>
+ );
+}
+
+function OnboardingSetupCard({ session }: { session: JwtReadySession | null }) {
+ const needsProfile = session?.user.isProfileComplete === false;
+ const needsFace = session?.user.hasActiveFaceEnrollment === false;
+
+ if (!needsProfile && !needsFace) {
+ return null;
+ }
+
+ return (
+ <Card className="rounded-lg border-primary/25 bg-card shadow-sm">
+ <CardContent className="p-5">
+ <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+ <div className="min-w-0">
+ <p className="text-sm font-semibold text-primary">Account setup</p>
+ <h2 className="mt-2 text-xl font-bold tracking-normal">Finish your employee setup</h2>
+ <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+ Complete your profile details and face setup to unlock attendance-ready account verification.
+ </p>
+ <div className="mt-4 grid gap-3 sm:grid-cols-2">
+ <div className="flex items-center justify-between gap-3 rounded-lg border bg-background p-3">
+ <span className="flex min-w-0 items-center gap-3">
+ <UserRound className="h-4 w-4 shrink-0 text-primary" />
+ <span className="truncate text-sm font-semibold">Profile details</span>
+ </span>
+ <SetupStatus complete={!needsProfile} />
+ </div>
+ <div className="flex items-center justify-between gap-3 rounded-lg border bg-background p-3">
+ <span className="flex min-w-0 items-center gap-3">
+ <ShieldCheck className="h-4 w-4 shrink-0 text-primary" />
+ <span className="truncate text-sm font-semibold">Face setup</span>
+ </span>
+ <SetupStatus complete={!needsFace} />
+ </div>
+ </div>
+ </div>
+ <div className="flex shrink-0 flex-col gap-2 sm:flex-row xl:flex-col">
+ {needsProfile ? (
+ <Button asChild type="button">
+ <Link to="/complete-profile">
+ <UserRound className="h-4 w-4" />
+ Complete Profile
+ </Link>
+ </Button>
+ ) : (
+ <Button disabled type="button" variant="outline">
+ <UserRound className="h-4 w-4" />
+ Complete Profile
+ </Button>
+ )}
+ {needsFace ? (
+ <Button asChild type="button">
+ <Link to="/face-enrollment">
+ <ShieldCheck className="h-4 w-4" />
+ Set Up Face
+ </Link>
+ </Button>
+ ) : (
+ <Button disabled type="button" variant="outline">
+ <ShieldCheck className="h-4 w-4" />
+ Set Up Face
+ </Button>
+ )}
+ </div>
+ </div>
+ </CardContent>
+ </Card>
+ );
+}
+
 export function RoleDashboardPage() {
- const role = getStoredAuthSession()?.user.role;
+ const [session, setSession] = useState<JwtReadySession | null>(() => getStoredAuthSession());
+ const role = session?.user.role;
  const [liveStats, setLiveStats] = useState<Record<string, { value: string; trend: string }>>({});
  const [liveActivity, setLiveActivity] = useState<ProfessionalDashboardActivity[]>([]);
  const loadSequenceRef = useRef(0);
@@ -300,6 +382,16 @@ export function RoleDashboardPage() {
  };
  }, [loadDashboard, role]);
 
+ useEffect(() => {
+ const syncSession = () => setSession(getStoredAuthSession());
+ window.addEventListener(authSessionChangedEvent, syncSession);
+ window.addEventListener("storage", syncSession);
+ return () => {
+ window.removeEventListener(authSessionChangedEvent, syncSession);
+ window.removeEventListener("storage", syncSession);
+ };
+ }, []);
+
  if (!isFrontlineRole(role)) {
  return <FullAccessDashboard />;
  }
@@ -307,5 +399,10 @@ export function RoleDashboardPage() {
  const config = roleDashboards[role];
  const stats = config.stats.map((stat) => (liveStats[stat.label] ? { ...stat, ...liveStats[stat.label] } : stat));
 
- return <ProfessionalDashboard config={{ ...config, stats, activity: liveActivity.length > 0 ? liveActivity : config.activity }} />;
+ return (
+ <ProfessionalDashboard
+ config={{ ...config, stats, activity: liveActivity.length > 0 ? liveActivity : config.activity }}
+ leadingContent={<OnboardingSetupCard session={session} />}
+ />
+ );
 }

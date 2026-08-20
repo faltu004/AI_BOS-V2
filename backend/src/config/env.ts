@@ -57,6 +57,9 @@ const envSchema = z.object({
   ATTENDANCE_OFFICE_LAT: z.coerce.number().min(-90).max(90).default(12.9716),
   ATTENDANCE_OFFICE_LNG: z.coerce.number().min(-180).max(180).default(77.5946),
   ATTENDANCE_RADIUS_METERS: z.coerce.number().int().positive().default(300),
+  LOG_DIR: z.string().default("logs"),
+  LOG_MAX_FILE_SIZE_MB: z.coerce.number().int().positive().default(20),
+  LOG_MAX_FILES: z.coerce.number().int().positive().default(10),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
@@ -84,6 +87,12 @@ if (parsedEnv.data.NODE_ENV === "production") {
 
   if (!parsedEnv.data.ENABLE_2FA && parsedEnv.data.NODE_ENV === "production") {
     console.warn("ENABLE_2FA is disabled in production; consider enabling it");
+  }
+
+  if (!parsedEnv.data.SMTP_HOST) {
+    console.warn(
+      "SMTP_HOST is not configured; password reset and other transactional emails will only be logged, not delivered. Set SMTP_HOST, SMTP_USER, and SMTP_PASSWORD to enable real email delivery.",
+    );
   }
 
   if (parsedEnv.data.JWT_ACCESS_EXPIRES_IN === parsedEnv.data.JWT_REFRESH_EXPIRES_IN) {

@@ -8,13 +8,17 @@ import type { AuthRole } from "./types";
 
 export const fullAccessRoles: readonly AuthRole[] = ["Owner", "Administrator"];
 
-export function roleHasAccess(role: AuthRole | undefined, allowedRoles: readonly AuthRole[]) {
+export function roleHasAccess(role: AuthRole | undefined, allowedRoles: readonly AuthRole[], allowFullAccessBypass = true) {
  if (!role) return false;
- return fullAccessRoles.includes(role) || allowedRoles.includes(role);
+ return (allowFullAccessBypass && fullAccessRoles.includes(role)) || allowedRoles.includes(role);
 }
 
-export function filterByRole<T extends { roles?: readonly AuthRole[] }>(items: readonly T[], role?: AuthRole) {
- return items.filter((item) => !item.roles || roleHasAccess(role, item.roles));
+export function filterByRole<T extends { roles?: readonly AuthRole[] }>(
+ items: readonly T[],
+ role?: AuthRole,
+ allowFullAccessBypass = true,
+) {
+ return items.filter((item) => !item.roles || roleHasAccess(role, item.roles, allowFullAccessBypass));
 }
 
 export function getStoredAuthRole() {
@@ -22,15 +26,21 @@ export function getStoredAuthRole() {
 }
 
 export function RequireAuth({
- allowedRoles,
- children,
- fallbackPath = "/dashboard",
- loginPath = "/login",
+  allowedRoles,
+  allowFullAccessBypass = true,
+  children,
+  requireProfileComplete = true,
+  requireFaceEnrollment = false,
+  fallbackPath = "/dashboard",
+  loginPath = "/login",
 }: {
- allowedRoles: readonly AuthRole[];
- children: ReactNode;
- fallbackPath?: string;
- loginPath?: string;
+  allowedRoles: readonly AuthRole[];
+  allowFullAccessBypass?: boolean;
+  children: ReactNode;
+  requireProfileComplete?: boolean;
+  requireFaceEnrollment?: boolean;
+  fallbackPath?: string;
+  loginPath?: string;
 }) {
  const location = useLocation();
  const session = getStoredAuthSession();
@@ -39,18 +49,26 @@ export function RequireAuth({
  return <Navigate replace state={{ from: location.pathname }} to={loginPath} />;
  }
 
- if (!roleHasAccess(session.user.role, allowedRoles)) {
+  if (!roleHasAccess(session.user.role, allowedRoles, allowFullAccessBypass)) {
  if (fallbackPath === location.pathname) {
  return <AccessDenied />;
  }
  return <Navigate replace to={fallbackPath} />;
- }
+  }
 
- if (!session.user.isProfileComplete && location.pathname !== "/complete-profile") {
+  if (session.user.mustChangePassword && location.pathname !== "/change-password-required") {
+    return <Navigate replace to="/change-password-required" />;
+  }
+
+  if (requireProfileComplete && !session.user.isProfileComplete && location.pathname !== "/complete-profile") {
  return <Navigate replace to="/complete-profile" />;
- }
+  }
 
- return <>{children}</>;
+  if (requireFaceEnrollment && !session.user.hasActiveFaceEnrollment && location.pathname !== "/face-enrollment") {
+    return <Navigate replace to="/face-enrollment" />;
+  }
+
+  return <>{children}</>;
 }
 
 export function AccessDenied({

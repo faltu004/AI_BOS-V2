@@ -5,6 +5,7 @@ import { organizationRepository } from "../repositories/organization.repository.
 import { organizationSettingsRepository } from "../repositories/organization-settings.repository.js";
 import { attendanceRepository } from "../repositories/attendance.repository.js";
 import { AppError } from "../utils/app-error.js";
+import { faceEnrollmentService } from "./face-enrollment.service.js";
 import type { AttendanceHistoryQuery, AttendanceLocationInput, AttendanceMarkInput, AttendanceSummaryQuery } from "../validation/attendance.validation.js";
 
 const indiaTimezone = "Asia/Kolkata";
@@ -138,13 +139,18 @@ export class AttendanceService {
       throw new AppError("Attendance is already checked in for today.", 409);
     }
 
+    const verification = await faceEnrollmentService.verifyAttendance(currentUserId, input.faceImage);
+
     return attendanceRepository.create({
       userId: new Types.ObjectId(currentUserId),
       date,
       status: "Present",
       checkInAt: new Date(),
+      checkInFaceVerified: verification.faceVerified,
+      checkInLivenessPassed: verification.livenessPassed,
+      checkInFaceEnrollmentId: new Types.ObjectId(verification.faceEnrollmentId),
+      checkInVerificationModelVersion: verification.verificationModelVersion,
       checkInLocation: await verifiedLocation(input),
-      checkInFaceImage: input.faceImage,
     });
   }
 
@@ -161,11 +167,16 @@ export class AttendanceService {
       throw new AppError("Attendance is already checked out for today.", 409);
     }
 
+    const verification = await faceEnrollmentService.verifyAttendance(currentUserId, input.faceImage);
+
     return attendanceRepository.updateByUserAndDate(currentUserId, date, {
       status: "Checked Out",
       checkOutAt: new Date(),
+      checkOutFaceVerified: verification.faceVerified,
+      checkOutLivenessPassed: verification.livenessPassed,
+      checkOutFaceEnrollmentId: new Types.ObjectId(verification.faceEnrollmentId),
+      checkOutVerificationModelVersion: verification.verificationModelVersion,
       checkOutLocation: await verifiedLocation(input),
-      checkOutFaceImage: input.faceImage,
     });
   }
 }

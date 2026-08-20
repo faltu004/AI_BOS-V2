@@ -8,5 +8,6 @@ export const auditCategories = [
   "settings_change",
   "file_activity",
   "report_download",
+  "device_update",
 ] as const;
 export type AuditCategory = (typeof auditCategories)[number];

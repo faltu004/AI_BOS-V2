@@ -8,6 +8,7 @@ import { verifyPassword } from "../utils/password.js";
 import { fingerprintDevice } from "../utils/device.js";
 import { securityService, isValidObjectId } from "./security.service.js";
 import { passwordService } from "./password.service.js";
+import { faceEnrollmentService } from "./face-enrollment.service.js";
 import { env } from "../config/env.js";
 import type {
   ChangePasswordInput,
@@ -15,7 +16,8 @@ import type {
   RefreshTokenInput,
 } from "../validation/auth.validation.js";
 
-function toAuthUser(user: UserDocument): PublicUser {
+async function toAuthUser(user: UserDocument): Promise<PublicUser> {
+  const hasActiveFaceEnrollment = await faceEnrollmentService.hasActiveEnrollment(user.id);
   return {
     id: user.id,
     fullName: user.fullName,
@@ -26,6 +28,8 @@ function toAuthUser(user: UserDocument): PublicUser {
     isEmailVerified: user.isEmailVerified,
     isActive: user.isActive,
     isProfileComplete: user.isProfileComplete,
+    mustChangePassword: user.mustChangePassword,
+    hasActiveFaceEnrollment,
     lastLoginAt: user.lastLoginAt,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
@@ -106,7 +110,7 @@ export class AuthService {
     });
 
     return {
-      user: toAuthUser(authUser),
+      user: await toAuthUser(authUser),
       tokens,
     };
   }
@@ -147,7 +151,7 @@ export class AuthService {
     });
 
     return {
-      user: toAuthUser(user),
+      user: await toAuthUser(user),
       tokens,
     };
   }

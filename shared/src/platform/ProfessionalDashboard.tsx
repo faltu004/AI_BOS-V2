@@ -13,7 +13,7 @@ import {
  X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { clearAuthSession, getStoredAuthSession } from "@shared/auth/auth-service";
 import { AttendanceDrawer } from "@shared/attendance";
@@ -117,6 +117,7 @@ function Sidebar({
 }) {
  const location = useLocation();
  const isTablet = useIsTablet();
+ const brandName = getStoredAuthSession()?.user.companyName?.trim() || "AI BOS";
  // Tablet (768–1023px) gets a persistent icon-rail, not the phone's off-canvas drawer.
  const effectiveCollapsed = collapsed || isTablet;
 
@@ -141,7 +142,7 @@ function Sidebar({
  <div className="flex h-12 items-center justify-between gap-2">
  {!effectiveCollapsed && (
  <Link className="min-w-0" to="/dashboard">
- <span className="block truncate text-base font-bold">Nexora Softworks</span>
+ <span className="block truncate text-base font-bold">{brandName}</span>
  <span className="block truncate text-xs text-muted-foreground">{config.roleLabel}</span>
  </Link>
  )}
@@ -250,7 +251,7 @@ function MobileSidebarToggle({ onOpenSidebar }: { onOpenSidebar: () => void }) {
  );
 }
 
-export function ProfessionalDashboard({ config }: { config: ProfessionalDashboardConfig }) {
+export function ProfessionalDashboard({ config, leadingContent }: { config: ProfessionalDashboardConfig; leadingContent?: ReactNode }) {
  const [collapsed, setCollapsed] = useState(false);
  const [mobileOpen, setMobileOpen] = useState(false);
  const [attendanceOpen, setAttendanceOpen] = useState(false);
@@ -322,6 +323,7 @@ export function ProfessionalDashboard({ config }: { config: ProfessionalDashboar
  <div className="flex min-w-0 flex-1">
  <main className="min-w-0 flex-1">
  <div className="space-y-6 p-4 lg:p-6">
+ {leadingContent}
  <motion.div animate={{ opacity: 1, y: 0 }} className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end" initial={{ opacity: 0, y: 18 }} transition={{ duration: 0.35 }}>
  <div>
  <p className="text-sm font-semibold text-primary">{config.eyebrow}</p>

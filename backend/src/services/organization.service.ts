@@ -7,7 +7,11 @@ export class OrganizationService {
   }
 
   async update(input: UpdateOrganizationInput, userId?: string) {
-    return organizationRepository.upsertGlobal({ ...input, updatedBy: userId });
+    const normalized = { ...input };
+    if (normalized.logo === "") {
+      delete normalized.logo;
+    }
+    return organizationRepository.upsertGlobal({ ...normalized, updatedBy: userId });
   }
 }
 

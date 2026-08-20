@@ -5,11 +5,13 @@ import type { AdminModule, AdminRecord } from "../admin.types";
 import { formatAdminValue } from "../admin.utils";
 
 export function AdminEntityTable({
+ actionsDisabled = false,
  module,
  onDelete,
  onEdit,
  records,
 }: {
+ actionsDisabled?: boolean;
  module: AdminModule;
  onDelete: (record: AdminRecord) => void;
  onEdit: (record: AdminRecord) => void;
@@ -53,18 +55,19 @@ export function AdminEntityTable({
  })}
  <td className="p-4">
  <div className="flex justify-end gap-2">
- {module.id !== "employees" && !isProtectedEmployeeAccount && (
+ {module.id !== "employees" && !isProtectedEmployeeAccount && !actionsDisabled && (
  <Button onClick={() => onEdit(record)} size="sm" type="button" variant="outline">
  <Edit3 className="h-4 w-4" />
  Edit
  </Button>
  )}
- {!isProtectedEmployeeAccount && (
+ {!isProtectedEmployeeAccount && !actionsDisabled && (
  <Button onClick={() => onDelete(record)} size="sm" type="button" variant="outline">
  <Trash2 className="h-4 w-4" />
  Delete
  </Button>
  )}
+ {actionsDisabled && <span className="text-xs font-semibold text-muted-foreground">Read-only</span>}
  </div>
  </td>
  </tr>

@@ -1,0 +1,109 @@
+{
+  "appId": "com.aibos.employee",
+  "productName": "AI BOS Employee",
+  "copyright": "Copyright © WorknAI Technology Pvt Ltd",
+  "artifactName": "AI-BOS-Employee-Setup-RC2.${ext}",
+  "directories": {
+    "output": "dist/employee-installer"
+  },
+  "files": [
+    "electron/employee-main.cjs",
+    "electron/preload.cjs",
+    "electron/runtime-security.cjs",
+    "frontend/dist/**/*",
+    "package.json",
+    "!backend/.env",
+    "!**/.env",
+    "!**/.env.*"
+  ],
+  "extraMetadata": {
+    "main": "electron/employee-main.cjs"
+  },
+  "extraResources": [
+    {
+      "from": "packaging/runtime-config/employee-aibos-config.json",
+      "to": "aibos-config.json"
+    },
+    {
+      "from": "device-agent/dist",
+      "to": "device-agent/agent/dist",
+      "filter": [
+        "**/*",
+        "!**/.env",
+        "!**/.env.*",
+        "!**/*token*",
+        "!**/*secret*"
+      ]
+    },
+    {
+      "from": "device-agent/package.json",
+      "to": "device-agent/agent/package.json"
+    },
+    {
+      "from": "device-agent/package-lock.json",
+      "to": "device-agent/agent/package-lock.json"
+    },
+    {
+      "from": "device-agent/node_modules",
+      "to": "device-agent/agent/node_modules",
+      "filter": [
+        "**/*",
+        "!**/.env",
+        "!**/.env.*",
+        "!**/*token*",
+        "!**/*secret*",
+        "!**/test/**",
+        "!**/tests/**"
+      ]
+    },
+    {
+      "from": "packaging/runtime/node.exe",
+      "to": "device-agent/runtime/node.exe"
+    },
+    {
+      "from": "packaging/windows/session-helper-task.ps1",
+      "to": "device-agent/install/session-helper-task.ps1"
+    },
+    {
+      "from": "packaging/windows/install-device-services.ps1",
+      "to": "device-agent/install/install-device-services.ps1"
+    },
+    {
+      "from": "packaging/windows/device-credential-migration.ps1",
+      "to": "device-agent/install/device-credential-migration.ps1"
+    },
+    {
+      "from": "packaging/windows/uninstall-device-services.ps1",
+      "to": "device-agent/install/uninstall-device-services.ps1"
+    },
+    {
+      "from": "packaging/windows/provisioning",
+      "to": "device-agent/provisioning",
+      "filter": [
+        "*.ps1"
+      ]
+    },
+    {
+      "from": "device-agent/service",
+      "to": "device-agent/service",
+      "filter": [
+        "AIBOSDeviceAgent.xml",
+        "AIBOSDeviceAgent.exe",
+        "AIBOSDeviceUpdater.xml",
+        "AIBOSDeviceUpdater.exe"
+      ]
+    }
+  ],
+  "win": {
+    "target": "nsis",
+    "signAndEditExecutable": false
+  },
+  "nsis": {
+    "include": "packaging/employee/installer.nsh",
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "perMachine": true
+  }
+}

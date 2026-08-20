@@ -6,7 +6,17 @@ import { verifyAccessToken } from "../utils/jwt.js";
 export type AuthenticatedUser = {
   id: string;
   role: string;
+  mustChangePassword?: boolean;
 };
+
+function isTemporaryPasswordAllowedPath(originalUrl: string): boolean {
+  const path = originalUrl.split("?")[0] ?? originalUrl;
+  return (
+    path.endsWith("/auth/me") ||
+    path.endsWith("/auth/change-password") ||
+    path.endsWith("/auth/logout")
+  );
+}
 
 export function resolveBearerToken(authorizationHeader?: string): string | null {
   if (!authorizationHeader?.startsWith("Bearer ")) {
@@ -32,7 +42,12 @@ export const authenticate: RequestHandler = async (req: Request, _res: Response,
     req.user = {
       id: user.id,
       role: user.role,
+      mustChangePassword: user.mustChangePassword,
     };
+
+    if (user.mustChangePassword && !isTemporaryPasswordAllowedPath(req.originalUrl)) {
+      throw new AppError("Password change is required before continuing", 403);
+    }
 
     next();
   } catch (error) {

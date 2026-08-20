@@ -35,6 +35,14 @@ export type AttendanceRecord = {
  checkOutLocation?: AttendanceLocation;
  checkInFaceImage?: string;
  checkOutFaceImage?: string;
+ checkInFaceVerified?: boolean;
+ checkOutFaceVerified?: boolean;
+ checkInLivenessPassed?: boolean;
+ checkOutLivenessPassed?: boolean;
+ checkInFaceEnrollmentId?: string;
+ checkOutFaceEnrollmentId?: string;
+ checkInVerificationModelVersion?: string;
+ checkOutVerificationModelVersion?: string;
  createdAt?: string;
  updatedAt?: string;
 };

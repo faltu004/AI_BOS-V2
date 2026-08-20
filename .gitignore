@@ -1,13 +1,50 @@
-node_modules
-dist
-frontend/node_modules
-frontend/dist
-backend/node_modules
-backend/dist
+# Node dependencies
+node_modules/
+
+# Production builds
+dist/
+*.tsbuildinfo
+
+# Environment secrets
 .env
 .env.*
+!.env.example
+!**/.env.example
+
+# Python virtual environments
+.venv/
+**/.venv/
+
+# Python cache
+__pycache__/
+**/__pycache__/
+.pytest_cache/
+**/.pytest_cache/
+
+# Logs
 *.log
-*.tsbuildinfo
-ai-service/.venv/
-ai-service/.pytest_cache/
-ai-service/**/__pycache__/
+logs/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Editor folders
+.vscode/
+.idea/
+.continue/
+
+# Development-time backup/phase snapshots (not part of any release)
+*.phase*-backup
+*.corrupted-*-backup
+*.memory-backup
+_hotfix-backups/
+phase21-backups/
+phase21-pilot-backups/
+pilot-build/
+phase21a2-command-core.txt
+phase21e-auth-audit-inspection.txt
+
+# Ad-hoc temp/result files dropped at the repo root
+_tmp-*.mjs
+*result.txt

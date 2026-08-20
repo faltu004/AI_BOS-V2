@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { motion } from "framer-motion";
 import { ArrowRight, TriangleAlert } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
 import { clearAuthSession, login } from "@shared/auth/auth-service";
@@ -20,7 +20,8 @@ type LoginPageProps = {
  subtitle?: string;
  /** Purely informational — tells the visitor who this portal is for. Not a picker; role always comes from the account. */
  intendedFor?: readonly AuthRole[];
- allowedRoles?: readonly AuthRole[];
+  allowedRoles?: readonly AuthRole[];
+  secondaryAction?: ReactNode;
 };
 
 export function LoginPage({
@@ -30,6 +31,7 @@ export function LoginPage({
  subtitle = "Access your business command center.",
  intendedFor,
  allowedRoles = intendedFor,
+ secondaryAction,
 }: LoginPageProps) {
  const [loginError, setLoginError] = useState("");
  const navigate = useNavigate();
@@ -116,6 +118,7 @@ export function LoginPage({
  <ArrowRight className="h-4 w-4" />
  </Button>
  </form>
+ {secondaryAction}
  </AuthLayout>
  );
 }

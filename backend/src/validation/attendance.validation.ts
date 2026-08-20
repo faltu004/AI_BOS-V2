@@ -8,7 +8,7 @@ export const attendanceLocationSchema = z.object({
 
 const faceImageSchema = z
   .string()
-  .startsWith("data:image/", "Face capture must be an image data URL")
+  .startsWith("data:image/png;base64,", "Face capture must be a PNG camera capture")
   .max(4_000_000, "Face capture is too large. Please retake the photo.");
 
 export const attendanceMarkSchema = attendanceLocationSchema.extend({

@@ -7,6 +7,7 @@ import { clearAuthSession, getStoredAuthSession } from "@shared/auth/auth-servic
 import type { AuthRole } from "@shared/auth/types";
 import { fetchRooms } from "@shared/collaboration/collaboration.api";
 import type { CollaborationRoom } from "@shared/collaboration/collaboration.schema";
+import { apiClient } from "@shared/lib/api-client";
 import { NotificationBell } from "@shared/notifications/NotificationBell";
 import { useBackendDataBridge } from "@shared/realtime/data-sync";
 import { ConfirmDialogProvider } from "@shared/ui/confirm-dialog";
@@ -20,6 +21,9 @@ export type AppRouteConfig = {
   path: string;
   element: ReactNode;
   allowedRoles?: readonly AuthRole[];
+  allowFullAccessBypass?: boolean;
+  requireProfileComplete?: boolean;
+  requireFaceEnrollment?: boolean;
 };
 
 export function lazyNamed<TModule extends Record<string, unknown>, TName extends keyof TModule>(
@@ -67,7 +71,16 @@ function getRouteElement(route: AppRouteConfig) {
     return route.element;
   }
 
-  return <RequireAuth allowedRoles={route.allowedRoles}>{route.element}</RequireAuth>;
+  return (
+    <RequireAuth
+      allowedRoles={route.allowedRoles}
+      allowFullAccessBypass={route.allowFullAccessBypass}
+      requireProfileComplete={route.requireProfileComplete}
+      requireFaceEnrollment={route.requireFaceEnrollment}
+    >
+      {route.element}
+    </RequireAuth>
+  );
 }
 
 export function AnimatedAppRoutes({ routes }: { routes: readonly AppRouteConfig[] }) {
@@ -75,7 +88,7 @@ export function AnimatedAppRoutes({ routes }: { routes: readonly AppRouteConfig[
 
   return (
     <Suspense fallback={<AppFallback />}>
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="sync">
         <motion.div
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
@@ -95,9 +108,11 @@ export function AnimatedAppRoutes({ routes }: { routes: readonly AppRouteConfig[
 }
 
 function useVisibleWorkspaceControls({
+  allowFullAccessBypass = true,
   quickCreateActions,
   searchItems,
 }: {
+  allowFullAccessBypass?: boolean;
   quickCreateActions: readonly QuickCreateAction[];
   searchItems: readonly WorkspaceSearchItem[];
 }) {
@@ -106,15 +121,24 @@ function useVisibleWorkspaceControls({
 
   return useMemo(
     () => ({
-      visibleQuickCreateActions: filterByRole(quickCreateActions, currentRole),
-      visibleSearchItems: filterByRole(searchItems, currentRole),
+      visibleQuickCreateActions: filterByRole(quickCreateActions, currentRole, allowFullAccessBypass),
+      visibleSearchItems: filterByRole(searchItems, currentRole, allowFullAccessBypass),
     }),
-    [currentRole, quickCreateActions, searchItems],
+    [allowFullAccessBypass, currentRole, quickCreateActions, searchItems],
   );
 }
 
-const hiddenChromePaths = ["/", "/login", "/forgot-password", "/reset-password", "/verify-email", "/complete-profile"];
-// "nav-notifications" is deliberately excluded here — the NotificationBell on the
+const hiddenChromePaths = [
+  "/",
+  "/login",
+  "/forgot-password",
+  "/reset-password",
+  "/verify-email",
+  "/complete-profile",
+  "/change-password-required",
+  "/face-enrollment",
+];
+// "nav-notifications" is deliberately excluded here â€” the NotificationBell on the
 // right already covers it (live unread count, dropdown, and a "View all" link to the
 // same page), so keeping both was a redundant, near-identical affordance.
 const quickNavOrder = ["nav-dashboard", "nav-tasks"];
@@ -127,6 +151,33 @@ type StoredPageItem = {
   label: string;
   category: string;
 };
+
+type OrganizationBrand = {
+  name?: string;
+  logo?: string;
+  businessType?: string;
+};
+
+function useOrganizationBrand() {
+  const [brand, setBrand] = useState<OrganizationBrand | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiClient.get<OrganizationBrand>("/organization", { cacheTtlMs: 60_000 }).then((organization) => {
+      if (!cancelled) setBrand(organization);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const name = brand?.name?.trim() || "AI BOS";
+  return {
+    name,
+    logo: brand?.logo,
+    subtitle: brand?.businessType || "Business OS",
+  };
+}
 
 function isWorkspacePath(pathname: string) {
   return !hiddenChromePaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
@@ -165,14 +216,14 @@ function getRouteLabel(pathname: string) {
     .join(" / ");
 }
 
-function TopBarBreadcrumb({ currentPage, pathname }: { currentPage?: StoredPageItem; pathname: string }) {
+function TopBarBreadcrumb({ brandName, currentPage, pathname }: { brandName: string; currentPage?: StoredPageItem; pathname: string }) {
   const segments = pathname.split("/").filter(Boolean);
   if (segments.length === 0) return null;
 
   return (
     <div className="hidden h-8 min-w-0 items-center gap-2 border-t border-border/70 bg-background/20 px-4 text-xs font-semibold text-muted-foreground lg:flex backdrop-blur-sm">
-      <Link className="block max-w-28 shrink-0 truncate transition-colors hover:text-foreground" title="Nexora" to="/dashboard">
-        Nexora
+      <Link className="block max-w-28 shrink-0 truncate transition-colors hover:text-foreground" title={brandName} to="/dashboard">
+        {brandName}
       </Link>
       {segments.map((segment, index) => {
         const href = `/${segments.slice(0, index + 1).join("/")}`;
@@ -809,6 +860,7 @@ function ProfileMenu() {
 
 function GlobalTopBar({ items, quickActions }: { items: readonly WorkspaceSearchItem[]; quickActions: readonly QuickCreateAction[] }) {
   const location = useLocation();
+  const brand = useOrganizationBrand();
   const frequentItems = quickNavOrder
     .map((id) => items.find((item) => item.id === id))
     .filter((item): item is WorkspaceSearchItem => Boolean(item));
@@ -839,7 +891,7 @@ function GlobalTopBar({ items, quickActions }: { items: readonly WorkspaceSearch
     >
       <div className="flex h-14 items-center gap-0.5 px-1.5 sm:gap-1 sm:px-3">
         <Link aria-label="Go to dashboard" className="mr-0.5 flex shrink-0 items-center sm:mr-1" to="/dashboard">
-          <CompanyLogo collapsed />
+          <CompanyLogo collapsed logoUrl={brand.logo} name={brand.name} subtitle={brand.subtitle} />
         </Link>
         <span aria-hidden="true" className="mr-0.5 h-6 w-px shrink-0 bg-border sm:mr-1" />
         <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto sm:gap-1">
@@ -883,19 +935,22 @@ function GlobalTopBar({ items, quickActions }: { items: readonly WorkspaceSearch
           <ProfileMenu />
         </div>
       </div>
-      <TopBarBreadcrumb currentPage={currentPage} pathname={location.pathname} />
+      <TopBarBreadcrumb brandName={brand.name} currentPage={currentPage} pathname={location.pathname} />
     </nav>
   );
 }
 
 const WorkspaceChrome = memo(function WorkspaceChrome({
+  allowFullAccessBypass,
   quickCreateActions,
   searchItems,
 }: {
+  allowFullAccessBypass?: boolean;
   quickCreateActions: readonly QuickCreateAction[];
   searchItems: readonly WorkspaceSearchItem[];
 }) {
   const { visibleQuickCreateActions, visibleSearchItems } = useVisibleWorkspaceControls({
+    allowFullAccessBypass,
     quickCreateActions,
     searchItems,
   });
@@ -912,10 +967,12 @@ const WorkspaceChrome = memo(function WorkspaceChrome({
 });
 
 export function AppProviders({
+  allowFullAccessBypass = true,
   children,
   quickCreateActions,
   searchItems,
 }: {
+  allowFullAccessBypass?: boolean;
   children: ReactNode;
   quickCreateActions: readonly QuickCreateAction[];
   searchItems: readonly WorkspaceSearchItem[];
@@ -929,7 +986,11 @@ export function AppProviders({
         {children}
         {chromeMounted ? (
           <Suspense fallback={null}>
-            <WorkspaceChrome quickCreateActions={quickCreateActions} searchItems={searchItems} />
+            <WorkspaceChrome
+              allowFullAccessBypass={allowFullAccessBypass}
+              quickCreateActions={quickCreateActions}
+              searchItems={searchItems}
+            />
           </Suspense>
         ) : null}
       </ConfirmDialogProvider>

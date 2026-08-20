@@ -40,6 +40,9 @@ const routeLabels: Record<string, string> = {
  "/forgot-password": "Forgot Password",
  "/reset-password": "Reset Password",
  "/verify-email": "Email Verification",
+ "/change-password-required": "Change Password",
+ "/complete-profile": "Complete Profile",
+ "/face-enrollment": "Face Setup",
 };
 
 const onboardingSteps = [
@@ -107,7 +110,7 @@ function getRouteLabel(pathname: string) {
 }
 
 function isAppRoute(pathname: string) {
- return !["/", "/login", "/forgot-password", "/complete-profile"].some((route) => pathname === route)
+ return !["/", "/login", "/forgot-password", "/change-password-required", "/complete-profile", "/face-enrollment"].some((route) => pathname === route)
  && !pathname.startsWith("/reset-password")
  && !pathname.startsWith("/verify-email");
 }

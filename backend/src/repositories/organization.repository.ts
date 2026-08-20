@@ -17,7 +17,7 @@ export class OrganizationRepository {
   async getOrCreateDefault() {
     const existing = await this.findGlobal();
     if (existing) return existing;
-    return this.upsertGlobal({});
+    return this.upsertGlobal({ name: "Company" });
   }
 }
 

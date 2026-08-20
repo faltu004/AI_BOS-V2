@@ -1,0 +1,37 @@
+<service>
+  <id>AIBOSDeviceUpdater</id>
+
+  <name>AI BOS Device Updater</name>
+
+  <description>
+    AI BOS fixed-purpose device agent update activation and rollback sidecar.
+  </description>
+
+  <executable>%BASE%\..\runtime\node.exe</executable>
+
+  <arguments>--use-system-ca "%BASE%\..\agent\dist\updater-activation-engine.js"</arguments>
+
+  <workingdirectory>%BASE%\..\agent</workingdirectory>
+
+  <env name="AGENT_MODE" value="updater" />
+
+  <env name="AI_BOS_DEVICE_AGENT_INSTALL_ROOT" value="%BASE%\.." />
+
+  <startmode>Automatic</startmode>
+
+  <delayedAutoStart>true</delayedAutoStart>
+
+  <stoptimeout>20 sec</stoptimeout>
+
+  <onfailure action="restart" delay="30 sec" />
+
+  <resetfailure>1 hour</resetfailure>
+
+  <serviceaccount>
+    <username>LocalSystem</username>
+  </serviceaccount>
+
+  <logpath>%BASE%\logs</logpath>
+
+  <log mode="roll"></log>
+</service>

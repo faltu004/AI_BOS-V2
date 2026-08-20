@@ -5,7 +5,19 @@ export type CreateUserInput = Pick<
   User,
   "fullName" | "companyName" | "email" | "passwordHash" | "role"
 > &
-  Partial<Pick<User, "organizationId" | "employeeProfile" | "isProfileComplete">> & {
+  Partial<
+    Pick<
+      User,
+      | "organizationId"
+      | "employeeProfile"
+      | "isProfileComplete"
+      | "mustChangePassword"
+      | "passwordChangedAt"
+      | "temporaryPasswordExpiresAt"
+      | "isEmailVerified"
+      | "isActive"
+    >
+  > & {
     /** Mongoose casts a valid hex string to ObjectId automatically on create. */
     departmentId?: string;
     branchId?: string;
@@ -37,6 +49,14 @@ export class UserRepository {
     return UserModel.findOne({ email: email.toLowerCase() }).select("+passwordHash");
   }
 
+  async countActiveByRole(role: string) {
+    return UserModel.countDocuments({ role, isActive: true });
+  }
+
+  async findActiveByRole(role: string) {
+    return UserModel.findOne({ role, isActive: true });
+  }
+
   async findById(id: string) {
     return UserModel.findById(id);
   }
@@ -46,7 +66,49 @@ export class UserRepository {
   }
 
   async updatePassword(id: string, passwordHash: string) {
-    return UserModel.findByIdAndUpdate(id, { passwordHash }, { new: true });
+    return UserModel.findByIdAndUpdate(
+      id,
+      {
+        $set: {
+          passwordHash,
+          mustChangePassword: false,
+          passwordChangedAt: new Date(),
+        },
+        $unset: {
+          temporaryPasswordExpiresAt: "",
+        },
+      },
+      { new: true },
+    );
+  }
+
+  async updateAccountCredentials(
+    id: string,
+    input: {
+      email?: string;
+      passwordHash?: string;
+      mustChangePassword?: boolean;
+      passwordChangedAt?: Date;
+      temporaryPasswordExpiresAt?: Date | null;
+    },
+  ) {
+    const setFields: Record<string, unknown> = {};
+    const unsetFields: Record<string, ""> = {};
+    if (input.email !== undefined) setFields.email = input.email.toLowerCase();
+    if (input.passwordHash !== undefined) setFields.passwordHash = input.passwordHash;
+    if (input.mustChangePassword !== undefined) setFields.mustChangePassword = input.mustChangePassword;
+    if (input.passwordChangedAt !== undefined) setFields.passwordChangedAt = input.passwordChangedAt;
+    if (input.temporaryPasswordExpiresAt === null) unsetFields.temporaryPasswordExpiresAt = "";
+    if (input.temporaryPasswordExpiresAt instanceof Date) setFields.temporaryPasswordExpiresAt = input.temporaryPasswordExpiresAt;
+
+    return UserModel.findByIdAndUpdate(
+      id,
+      {
+        ...(Object.keys(setFields).length > 0 ? { $set: setFields } : {}),
+        ...(Object.keys(unsetFields).length > 0 ? { $unset: unsetFields } : {}),
+      },
+      { new: true, runValidators: true },
+    );
   }
 
   async findMany(filter: FilterQuery<User> = {}) {

@@ -1,0 +1,39 @@
+{
+  "appId": "com.aibos.admin",
+  "productName": "AI BOS Admin",
+  "copyright": "Copyright © WorknAI Technology Pvt Ltd",
+  "artifactName": "AI-BOS-Admin-Setup-RC2.${ext}",
+  "directories": {
+    "output": "dist/admin-installer"
+  },
+  "files": [
+    "electron/admin-main.cjs",
+    "electron/preload.cjs",
+    "electron/runtime-security.cjs",
+    "admin/dist/**/*",
+    "package.json",
+    "!backend/.env",
+    "!**/.env",
+    "!**/.env.*"
+  ],
+  "extraMetadata": {
+    "main": "electron/admin-main.cjs"
+  },
+  "extraResources": [
+    {
+      "from": "packaging/runtime-config/admin-aibos-config.json",
+      "to": "aibos-config.json"
+    }
+  ],
+  "win": {
+    "target": "nsis",
+    "signAndEditExecutable": false
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "perMachine": true
+  }
+}

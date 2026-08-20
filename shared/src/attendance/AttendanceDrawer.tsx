@@ -342,8 +342,8 @@ export function AttendanceDrawer({
  context.scale(-1, 1);
  context.drawImage(video, canvas.width - drawX - drawWidth, drawY, drawWidth, drawHeight);
  context.restore();
- const capturedImage = canvas.toDataURL("image/jpeg", 0.42);
- if (!capturedImage.startsWith("data:image/") || capturedImage.length > 4_000_000) {
+    const capturedImage = canvas.toDataURL("image/png");
+    if (!capturedImage.startsWith("data:image/png;base64,") || capturedImage.length > 4_000_000) {
  setMessage("Face photo could not be accepted. Please retake it.");
  return;
  }

@@ -4,7 +4,16 @@ import { decodeJwtPayload, type AuthRole, type JwtReadySession } from "./types";
 export const authSessionChangedEvent = "ai_bos_auth_session_changed";
 
 type LoginResponse = {
- user: { email: string; role: AuthRole | "Admin" | "CEO"; fullName: string; isProfileComplete?: boolean; avatar?: string };
+ user: {
+ email: string;
+ role: AuthRole | "Admin" | "CEO";
+ fullName: string;
+ companyName?: string;
+ isProfileComplete?: boolean;
+ mustChangePassword?: boolean;
+ hasActiveFaceEnrollment?: boolean;
+ avatar?: string;
+ };
  tokens: {
  accessToken: string;
  refreshToken: string;
@@ -30,6 +39,7 @@ function normalizeSession(session: JwtReadySession): JwtReadySession {
  // all — treat them as already-complete so already-onboarded users aren't
  // retroactively locked out until their next real login/refresh.
  isProfileComplete: session.user.isProfileComplete ?? true,
+ mustChangePassword: session.user.mustChangePassword ?? false,
  },
  };
 }
@@ -98,6 +108,9 @@ export async function login(email: string, password: string, rememberMe: boolean
  role: normalizeAuthRole(data.user.role),
  fullName: data.user.fullName,
  isProfileComplete: data.user.isProfileComplete ?? true,
+ companyName: data.user.companyName,
+ mustChangePassword: data.user.mustChangePassword ?? false,
+ hasActiveFaceEnrollment: data.user.hasActiveFaceEnrollment,
  avatar: data.user.avatar,
  },
  };
@@ -203,6 +216,9 @@ async function performRefresh(): Promise<JwtReadySession | null> {
  role: normalizeAuthRole(data.user.role),
  fullName: data.user.fullName,
  isProfileComplete: data.user.isProfileComplete ?? true,
+ companyName: data.user.companyName,
+ mustChangePassword: data.user.mustChangePassword ?? false,
+ hasActiveFaceEnrollment: data.user.hasActiveFaceEnrollment,
  avatar: data.user.avatar,
  },
  };

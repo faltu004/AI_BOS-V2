@@ -6,10 +6,10 @@ import type {
  DirectoryUser,
 } from "./collaboration.schema";
 import { getStoredAuthSession, isSessionExpired, refreshSession } from "@shared/auth/auth-service";
+import { getApiBaseUrl, getApiOrigin } from "@shared/lib/env";
 
-const viteEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
-const apiBaseUrl = viteEnv?.VITE_API_BASE_URL ?? "http://127.0.0.1:5000/api/v1";
-const apiAssetOrigin = apiBaseUrl.replace(/\/api\/v1\/?$/, "");
+const apiBaseUrl = getApiBaseUrl();
+const apiAssetOrigin = getApiOrigin();
 
 type ApiEnvelope<T> = {
  success: boolean;

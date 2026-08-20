@@ -26,6 +26,7 @@ import {
 import { liveSyncIntervalMs, sharedDataChangedEvent } from "@shared/realtime/data-sync";
 import { fetchTeamAccounts } from "@shared/team-accounts/team-accounts.api";
 import { fetchTaskStats } from "@shared/tasks/tasks.api";
+import { useAdministratorMonitoringAccess } from "@/admin/features/administrator-access/AdministratorMonitoringAccessContext";
 
 const adminNav = [
  {
@@ -133,6 +134,7 @@ function getPanelRole(role?: AuthRole): keyof typeof panelConfigs {
 }
 
 export function AdminDashboardPage() {
+ const { hasPermission } = useAdministratorMonitoringAccess();
  const role = getPanelRole(getStoredAuthSession()?.user.role);
  const [liveStats, setLiveStats] = useState<Record<string, { value: string; trend: string }>>({});
  const loadSequenceRef = useRef(0);
@@ -223,7 +225,16 @@ export function AdminDashboardPage() {
  };
  }, [loadDashboard]);
 
- const config = panelConfigs[role];
+ const baseConfig = panelConfigs[role];
+ const config = hasPermission("device.monitoring.view")
+ ? baseConfig
+ : {
+ ...baseConfig,
+ navGroups: baseConfig.navGroups.map((group) => ({
+ ...group,
+ items: group.items.filter((item) => item.href !== "/monitoring"),
+ })),
+ };
  const stats = config.stats.map((stat) => (liveStats[stat.label] ? { ...stat, ...liveStats[stat.label] } : stat));
 
  return <ProfessionalDashboard config={{ ...config, stats }} />;

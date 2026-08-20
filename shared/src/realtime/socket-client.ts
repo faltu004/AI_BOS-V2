@@ -1,10 +1,8 @@
 import { io, type Socket } from "socket.io-client";
-
-const viteEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
-const apiBaseUrl = viteEnv?.VITE_API_BASE_URL ?? "http://127.0.0.1:5000/api/v1";
+import { getApiOrigin } from "@shared/lib/env";
 
 export function apiOrigin() {
- return apiBaseUrl.replace(/\/api\/v1\/?$/, "");
+ return getApiOrigin();
 }
 
 let socket: Socket | null = null;

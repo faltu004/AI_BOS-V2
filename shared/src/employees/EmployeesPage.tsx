@@ -133,7 +133,7 @@ function EmployeeFormModal({
  <div className="grid gap-4 md:grid-cols-2">
  <div className="space-y-2">
  <Label htmlFor="password">Temporary password</Label>
- <PasswordInput id="password" className={cn(errors.password && "border-destructive focus-visible:ring-destructive/20")} placeholder="Admin@123456" {...register("password")} />
+ <PasswordInput id="password" className={cn(errors.password && "border-destructive focus-visible:ring-destructive/20")} placeholder="Temporary password" {...register("password")} />
  {errors.password && <p className="text-xs font-medium text-destructive">{errors.password.message}</p>}
  </div>
  <div className="space-y-2">

@@ -50,6 +50,9 @@ export type User = {
   avatar?: string;
   employeeProfile?: EmployeeProfile;
   isProfileComplete: boolean;
+  mustChangePassword: boolean;
+  passwordChangedAt?: Date;
+  temporaryPasswordExpiresAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -166,6 +169,17 @@ const userSchema = new Schema<User>(
     isProfileComplete: {
       type: Boolean,
       default: false,
+    },
+    mustChangePassword: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    passwordChangedAt: {
+      type: Date,
+    },
+    temporaryPasswordExpiresAt: {
+      type: Date,
     },
   },
   {

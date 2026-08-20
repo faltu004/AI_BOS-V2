@@ -92,8 +92,13 @@ export class ResetPasswordService {
       throw new AppError("New password must be different from previous passwords", 400);
     }
 
+    const userWithPassword = await userRepository.findByEmailWithPassword(user.email);
+    if (!userWithPassword) {
+      throw new AppError("User not found", 404);
+    }
+
     const passwordHash = await passwordService.hash(input.newPassword);
-    const previousHash = (user as UserDocument).passwordHash;
+    const previousHash = userWithPassword.passwordHash;
 
     await passwordService.changePasswordWithHistory(user.id, passwordHash, previousHash);
 

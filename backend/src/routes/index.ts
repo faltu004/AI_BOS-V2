@@ -11,6 +11,7 @@ import { collaborationRoomRoutes } from "./collaboration-room.routes.js";
 import { companyPolicyRoutes } from "./company-policy.routes.js";
 import { departmentRoutes } from "./department.routes.js";
 import { financeRoutes } from "./finance.routes.js";
+import { faceEnrollmentRoutes } from "./face-enrollment.routes.js";
 import { holidayRoutes } from "./holiday.routes.js";
 import { integrationRoutes } from "./integration.routes.js";
 import { leaveRequestRoutes } from "./leave-request.routes.js";
@@ -24,6 +25,7 @@ import { permissionAuditLogRoutes } from "./permission-audit-log.routes.js";
 import { permissionCatalogRoutes } from "./permission-catalog.routes.js";
 import { permissionGroupRoutes } from "./permission-group.routes.js";
 import { projectRoutes } from "./project.routes.js";
+import { protectedAccountRoutes } from "./protected-account.routes.js";
 import { roleRoutes } from "./role.routes.js";
 import { leadRoutes } from "./lead.routes.js";
 import { taskRoutes } from "./task.routes.js";
@@ -36,6 +38,8 @@ import { userRoutes } from "./user.routes.js";
 import { workflowRoutes } from "./workflow.routes.js";
 import { auditMiddleware } from "../middleware/audit.middleware.js";
 import { monitoringRoutes } from "./monitoring.routes.js";
+import { deviceRoutes } from "./device.routes.js";
+import { administratorMonitoringAccessRoutes } from "./administrator-monitoring-access.routes.js";
 
 export const routes = Router();
 
@@ -57,12 +61,14 @@ routes.use("/backup", backupRoutes);
 routes.use("/collaboration/rooms", collaborationRoomRoutes);
 routes.use("/collaboration/messages", collaborationMessageRoutes);
 routes.use("/finance", financeRoutes);
+routes.use("/face-enrollment", faceEnrollmentRoutes);
 routes.use("/integrations", integrationRoutes);
 routes.use("/leave-requests", leaveRequestRoutes);
 routes.use("/notifications/preferences", notificationPreferenceRoutes);
 routes.use("/notifications/scheduled", scheduledNotificationRoutes);
 routes.use("/notifications", notificationRoutes);
 routes.use("/projects", projectRoutes);
+routes.use("/protected-accounts", protectedAccountRoutes);
 routes.use("/tasks", taskRoutes);
 routes.use("/leads", leadRoutes);
 routes.use("/users", userRoutes);
@@ -84,3 +90,8 @@ routes.use("/rbac/role-history", roleHistoryRoutes);
 routes.use("/rbac/permissions", permissionCatalogRoutes);
 routes.use("/security", securityRoutes);
 routes.use("/monitoring", monitoringRoutes);
+routes.use("/devices", deviceRoutes);
+routes.use(
+  "/administrator-monitoring-access",
+  administratorMonitoringAccessRoutes,
+);

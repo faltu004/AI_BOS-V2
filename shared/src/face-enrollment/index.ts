@@ -1,0 +1,1 @@
+export { FaceEnrollmentPage } from "./FaceEnrollmentPage";

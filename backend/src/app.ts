@@ -15,10 +15,8 @@ import { routes } from "./routes/index.js";
 
 export function createApp() {
   const app = express();
-
-  if (appConfig.isProduction) {
-    app.set("trust proxy", 1);
-  }
+  // Direct server/LAN deployment: do not trust forwarded proxy headers.
+  app.set("trust proxy", false);
 
   app.use(requestIdMiddleware);
   app.use(requestLoggerMiddleware);

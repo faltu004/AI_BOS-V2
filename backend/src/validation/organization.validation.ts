@@ -20,7 +20,7 @@ export const logoDataUriSchema = z
 export const updateOrganizationSchema = z.object({
   name: z.string().min(2).max(180).optional(),
   legalName: z.string().max(180).optional(),
-  logo: logoDataUriSchema.optional(),
+  logo: logoDataUriSchema.optional().or(z.literal("")),
   businessType: z.enum(businessTypes).optional(),
   gstin: z.string().regex(gstinRegex, "Invalid GSTIN format").optional().or(z.literal("")),
   pan: z.string().regex(panRegex, "Invalid PAN format").optional().or(z.literal("")),

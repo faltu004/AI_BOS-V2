@@ -130,6 +130,7 @@ export class UserService {
       teamIds: input.teamIds,
       employeeProfile: { ...input.employeeProfile, phone: input.phone },
       isProfileComplete: false,
+      mustChangePassword: true,
     });
 
     const isValidId = Types.ObjectId.isValid(user.id);

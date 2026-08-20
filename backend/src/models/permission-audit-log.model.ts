@@ -10,11 +10,17 @@ export const permissionAuditActions = [
   "role_template.create",
   "role_template.update",
   "role_template.delete",
+  "administrator_monitoring_access.update",
 ] as const;
 
 export type PermissionAuditAction = (typeof permissionAuditActions)[number];
 
-export const permissionAuditTargetTypes = ["Role", "PermissionGroup", "RoleTemplate"] as const;
+export const permissionAuditTargetTypes = [
+  "Role",
+  "PermissionGroup",
+  "RoleTemplate",
+  "AdministratorMonitoringAccess",
+] as const;
 export type PermissionAuditTargetType = (typeof permissionAuditTargetTypes)[number];
 
 export type PermissionAuditLog = {

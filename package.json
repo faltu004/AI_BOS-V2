@@ -1,9 +1,16 @@
 {
   "name": "ai-bos",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.0-rc.2",
+  "description": "AI BOS Business Operating System",
+  "author": "WorknAI Technology Pvt Ltd",
   "type": "module",
-  "workspaces": ["frontend", "admin", "ceo", "shared"],
+  "workspaces": [
+    "frontend",
+    "admin",
+    "ceo",
+    "shared"
+  ],
   "scripts": {
     "frontend:dev": "npm --prefix frontend run dev",
     "frontend:dev:server": "npm --prefix frontend run dev:server",
@@ -33,6 +40,42 @@
     "coverage": "npm run coverage:js",
     "lint": "npm run frontend:lint && npm run admin:lint && npm run ceo:lint",
     "build": "npm run frontend:build && npm run admin:build && npm run ceo:build && npm run backend:build",
-    "dev": "npm run frontend:dev"
+    "dev": "npm run frontend:dev",
+    "desktop": "echo Legacy desktop dev is disabled; use Admin or Employee desktop launchers with explicit dev URLs.",
+    "package:admin:prepare": "npm run admin:build && electron-builder --config packaging/admin/electron-builder.json",
+    "package:employee:prepare": "npm run frontend:build && npm --prefix device-agent run build && electron-builder --config packaging/employee/electron-builder.json"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.4",
+    "electron": "^43.3.0",
+    "electron-builder": "^26.15.3",
+    "wait-on": "^9.1.0"
+  },
+  "build": {
+    "appId": "com.aibos.desktop",
+    "productName": "AI BOS",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "frontend/dist/**/*",
+      "package.json",
+      "!backend/.env",
+      "!**/.env",
+      "!**/.env.*"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  },
+  "dependencies": {
+    "axios": "^1.19.0"
   }
 }

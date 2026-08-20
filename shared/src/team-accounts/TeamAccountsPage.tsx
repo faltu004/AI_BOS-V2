@@ -204,7 +204,7 @@ export function TeamAccountsPage() {
 
  <div className="space-y-2">
  <Label htmlFor="password">Temporary password</Label>
- <PasswordInput id="password" placeholder="Admin@123456" {...register("password")} />
+ <PasswordInput id="password" placeholder="Temporary password" {...register("password")} />
  {errors.password && <p className="text-xs font-medium text-destructive">{errors.password.message}</p>}
  </div>
 

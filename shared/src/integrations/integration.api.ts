@@ -1,7 +1,7 @@
 import type { IntegrationCardData, IntegrationFamily, IntegrationLogEntry, ProviderConfigStatus } from "./integration.schema";
+import { getApiBaseUrl } from "@shared/lib/env";
 
-const viteEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
-const apiBaseUrl = viteEnv?.VITE_API_BASE_URL ?? "http://127.0.0.1:5000/api/v1";
+const apiBaseUrl = getApiBaseUrl();
 
 type ApiEnvelope<T> = { success: boolean; message: string; data: T };
 

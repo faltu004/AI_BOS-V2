@@ -35,23 +35,6 @@ export function parseAdminFieldValue(value: string, type: string) {
  return value;
 }
 
-export function generateTemporaryPassword(): string {
- const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
- const lowercase = "abcdefghijklmnopqrstuvwxyz";
- const digits = "0123456789";
- const symbols = "!@#$%^&*";
-
- const pick = (set: string) => set[Math.floor(Math.random() * set.length)];
-
- return [
- pick(uppercase),
- pick(lowercase),
- pick(digits),
- pick(symbols),
- ...Array.from({ length: 8 }, () => pick(uppercase + lowercase + digits + symbols)),
- ].join("");
-}
-
 export function downloadAdminBackup(payload: unknown) {
  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
  const url = URL.createObjectURL(blob);

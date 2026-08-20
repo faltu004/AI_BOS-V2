@@ -1,4 +1,4 @@
-export type PermissionModule =
+﻿export type PermissionModule =
   | "Organization"
   | "Department"
   | "Branch"
@@ -18,7 +18,8 @@ export type PermissionModule =
   | "Collaboration"
   | "Notification"
   | "Audit"
-  | "Backup";
+  | "Backup"
+  | "Device Security";
 
 export type PermissionCatalogEntry = {
   key: string;
@@ -142,8 +143,22 @@ export const permissionCatalog: PermissionCatalogEntry[] = [
 
   // Backup
   { key: "backup.manage", module: "Backup", label: "Manage backups", description: "Run, schedule, download, and restore system backups." },
+  // Device Security
+  { key: "device.credential.view", module: "Device Security", label: "View device credentials", description: "View managed-device credential metadata and security status." },
+  { key: "device.credential.rotate", module: "Device Security", label: "Rotate device credentials", description: "Authorize secure rotation of managed-device authentication credentials." },
+  { key: "device.credential.revoke", module: "Device Security", label: "Revoke device credentials", description: "Revoke a managed-device credential and block future per-device authentication." },  { key: "device.auth.migration_status", module: "Device Security", label: "View device auth migration status", description: "View legacy authentication compatibility and strict-cutover configuration status." },
+  { key: "device.command.view", module: "Device Security", label: "View device commands", description: "View managed-device command history and execution status." },
+  { key: "device.command.execute", module: "Device Security", label: "Execute device commands", description: "Queue approved non-power commands for managed devices." },
+  { key: "device.command.power", module: "Device Security", label: "Control device power", description: "Authorize approved restart and shutdown actions for managed devices." },
+  { key: "device.monitoring.view", module: "Device Security", label: "View device monitoring", description: "View managed endpoints, telemetry, inventory, usage, update status, and device details." },
+  { key: "device.software.manage", module: "Device Security", label: "Manage device software", description: "Manage approved software packages and endpoint install, update, and uninstall actions." },
+  { key: "device.restriction.manage", module: "Device Security", label: "Manage application restrictions", description: "View and change managed-device application restriction policies." },
+  { key: "device.remote_support.create", module: "Device Security", label: "Create remote support sessions", description: "Request and view consented remote support sessions." },
+  { key: "device.remote_support.control", module: "Device Security", label: "Control remote support sessions", description: "Send authorized remote input during a consented remote support session." },
 ];
 
 export const permissionKeys = permissionCatalog.map((entry) => entry.key) as [string, ...string[]];
 
 export type PermissionKey = (typeof permissionKeys)[number];
+
+

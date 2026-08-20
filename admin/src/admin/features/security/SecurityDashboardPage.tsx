@@ -1,6 +1,7 @@
 import { ShieldCheck, ShieldAlert, ShieldX, Smartphone, History, KeyRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getStoredAuthSession } from "@shared/auth/auth-service";
+import { getApiBaseUrl } from "@shared/lib/env";
 import { formatDateTime } from "@shared/lib/utils-helpers";
 import { Button } from "@shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@shared/ui/card";
@@ -45,14 +46,11 @@ function severityClass(severity: Severity) {
  }
 }
 
-const defaultBaseUrl = typeof window !== "undefined" ? `${window.location.hostname}:5000/api/v1` : "/api/v1";
-
 export function SecurityDashboardPage() {
  const { toast } = useToast();
  const session = getStoredAuthSession();
  const token = session?.accessToken;
- const viteEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
- const baseUrl = viteEnv?.VITE_API_BASE_URL ?? defaultBaseUrl;
+ const baseUrl = getApiBaseUrl();
 
  const [summary, setSummary] = useState<SecuritySummary | null>(null);
  const [loading, setLoading] = useState(false);

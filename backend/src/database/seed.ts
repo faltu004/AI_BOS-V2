@@ -41,7 +41,7 @@ type SeedUser = {
 const companyName = "Nexora Softworks Pvt. Ltd.";
 const companyShortName = "Nexora Softworks";
 const companyDomain = "nexorasoftworks.dev";
-const demoPassword = "Admin@12345";
+const demoPassword = process.env.AI_BOS_DEMO_SEED_PASSWORD;
 const companyLogoSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect width="128" height="128" rx="24" fill="#101828"/><path d="M28 92V36h14l44 56h14V36H84v32L56 36H28v56z" fill="#56F0C4"/><path d="M38 92h62v-14H50L38 92z" fill="#4DA3FF"/></svg>`;
 const companyLogoDataUri = `data:image/svg+xml;utf8,${encodeURIComponent(companyLogoSvg)}`;
 
@@ -765,10 +765,16 @@ async function seedRBAC() {
     "user.edit",
   ];
   const employeePermissions: string[] = ["task.create", "task.update", "task.log_time", "task.comment"];
-
   const roleDefinitions = [
     { slug: "owner", name: "Owner", isSystem: true, hasFullAccess: true, rank: 100, permissionKeys: [] as string[] },
-    { slug: "administrator", name: "Administrator", isSystem: true, hasFullAccess: true, rank: 90, permissionKeys: [] as string[] },
+    {
+      slug: "administrator",
+      name: "Administrator",
+      isSystem: true,
+      hasFullAccess: true,
+      rank: 90,
+      permissionKeys: [] as string[],
+    },
     { slug: "manager", name: "Manager", isSystem: true, hasFullAccess: false, rank: 70, permissionKeys: managerPermissions },
     { slug: "hr", name: "HR", isSystem: true, hasFullAccess: false, rank: 60, permissionKeys: hrPermissions },
     {
@@ -1562,6 +1568,10 @@ async function seedDatabase() {
 
   await mongoose.connection.db.dropDatabase();
   logger.warn(`Cleared database before seeding Nexora demo data: ${env.MONGODB_URI}`);
+
+  if (!demoPassword) {
+    throw new Error("AI_BOS_DEMO_SEED_PASSWORD is required to run demo seed data");
+  }
 
   const passwordHash = await hashPassword(demoPassword);
 

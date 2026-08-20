@@ -80,6 +80,7 @@ import {
  type OrgHierarchyResponse,
  type OrganizationForm,
  type OrganizationSettingsForm,
+ organizationSchema,
  type Team,
  type TeamFormInput,
 } from "./organization.schema";
@@ -275,7 +276,17 @@ export function OrganizationPage() {
  const saveProfile = async () => {
  setSavingProfile(true);
  try {
- const saved = await saveOrganization(organization, token);
+ const parsed = organizationSchema.safeParse(organization);
+ if (!parsed.success) {
+ const firstIssue = parsed.error.issues[0];
+ toast({ title: "Check company details", description: firstIssue?.message ?? "Some fields need correction.", type: "error" });
+ return;
+ }
+ const payload: Partial<OrganizationForm> = { ...parsed.data };
+ if (!payload.logo) {
+ delete payload.logo;
+ }
+ const saved = await saveOrganization(payload, token);
  setOrganization({ ...defaultOrganization, ...saved });
  toast({ title: "Organization profile saved", type: "success" });
  } catch (error) {
