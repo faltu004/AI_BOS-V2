@@ -5,10 +5,9 @@ import { useState, type ReactNode } from "react";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
 import { clearAuthSession, login } from "@shared/auth/auth-service";
-import { AuthDivider } from "@shared/auth/components/AuthDivider";
+
 import { AuthFormField } from "@shared/auth/components/AuthFormField";
 import { AuthLayout } from "@shared/auth/components/AuthLayout";
-import { SocialAuthButtons } from "@shared/auth/components/SocialAuthButtons";
 import { loginSchema, type LoginFormValues } from "@shared/auth/schemas";
 import type { AuthRole } from "@shared/auth/types";
 import { Button } from "@shared/ui/button";
@@ -76,9 +75,6 @@ export function LoginPage({
  <span>{loginError}</span>
  </motion.div>
  )}
-
- <SocialAuthButtons />
- <AuthDivider />
 
  <form className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
  <AuthFormField

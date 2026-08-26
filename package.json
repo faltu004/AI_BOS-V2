@@ -8,7 +8,6 @@
   "workspaces": [
     "frontend",
     "admin",
-    "ceo",
     "shared"
   ],
   "scripts": {
@@ -21,10 +20,7 @@
     "admin:build": "npm --prefix admin run build",
     "admin:preview": "npm --prefix admin run preview",
     "admin:lint": "npm --prefix admin run lint",
-    "ceo:dev": "npm --prefix ceo run dev",
-    "ceo:build": "npm --prefix ceo run build",
-    "ceo:preview": "npm --prefix ceo run preview",
-    "ceo:lint": "npm --prefix ceo run lint",
+
     "backend:dev": "npm --prefix backend run dev",
     "backend:build": "npm --prefix backend run build",
     "backend:start": "npm --prefix backend start",
@@ -38,8 +34,8 @@
     "coverage:e2e": "node --experimental-test-coverage --import ./backend/node_modules/tsx/dist/esm/index.mjs --test \"tests/e2e/**/*.test.ts\"",
     "test": "npm run test:js",
     "coverage": "npm run coverage:js",
-    "lint": "npm run frontend:lint && npm run admin:lint && npm run ceo:lint",
-    "build": "npm run frontend:build && npm run admin:build && npm run ceo:build && npm run backend:build",
+    "lint": "npm run frontend:lint && npm run admin:lint",
+    "build": "npm run frontend:build && npm run admin:build && npm run backend:build",
     "dev": "npm run frontend:dev",
     "desktop": "echo Legacy desktop dev is disabled; use Admin or Employee desktop launchers with explicit dev URLs.",
     "package:admin:prepare": "npm run admin:build && electron-builder --config packaging/admin/electron-builder.json",

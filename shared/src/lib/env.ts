@@ -81,29 +81,31 @@ function readRuntimeApiBaseUrl():
 }
 
 export function getApiBaseUrl(): string {
-  const runtimeApiBaseUrl =
-    readRuntimeApiBaseUrl();
+  const runtimeApiBaseUrl = readRuntimeApiBaseUrl();
 
   if (runtimeApiBaseUrl) {
     return runtimeApiBaseUrl;
   }
 
-  const devApiBaseUrl =
-    normalizeApiBaseUrl(
-      readDevApiBaseUrl(),
-    );
+  const devApiBaseUrl = normalizeApiBaseUrl(readDevApiBaseUrl());
 
   if (devApiBaseUrl) {
     return devApiBaseUrl;
   }
 
-  if (
-    typeof window !== "undefined" &&
-    window.electronAPI
-  ) {
-    throw new Error(
-      "AI BOS desktop API_BASE_URL is not configured.",
-    );
+  if (typeof window !== "undefined") {
+    if (window.electronAPI && !window.electronAPI.config?.API_BASE_URL) {
+      // In Electron Desktop App, default to Main PC IP or local server
+      const hostname = window.location.hostname || "127.0.0.1";
+      return `http://${hostname}:5000/api/v1`;
+    }
+
+    // In Web browser (LAN or Cloudflare Tunnel)
+    const { protocol, hostname, port } = window.location;
+    // If running on Vite dev port (8080, 8081), point to backend port 5000 on the same host
+    if (port === "8080" || port === "8081" || port === "3000") {
+      return `${protocol}//${hostname}:5000/api/v1`;
+    }
   }
 
   return "/api/v1";

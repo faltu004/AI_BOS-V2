@@ -1,3 +1,4 @@
+import { Navigate } from "react-router-dom";
 import { AnimatedAppRoutes, AppProviders, lazyNamed, type AppRouteConfig } from "@shared/platform/AppShell";
 import {
  employeeDirectoryRoles,
@@ -11,7 +12,7 @@ import {
  workspaceSearchItems,
 } from "@/data/workspace";
 
-const HomePage = lazyNamed(() => import("@/pages/HomePage"), "HomePage");
+
 const LoginPage = lazyNamed(() => import("@/features/auth/login"), "LoginPage");
 const ForgotPasswordPage = lazyNamed(() => import("@/features/auth/pages/ForgotPasswordPage"), "ForgotPasswordPage");
 const ResetPasswordPage = lazyNamed(() => import("@/features/auth/pages/ResetPasswordPage"), "ResetPasswordPage");
@@ -40,7 +41,7 @@ const FaceEnrollmentPage = lazyNamed(() => import("@shared/face-enrollment"), "F
 
 
 const routes: AppRouteConfig[] = [
- { path: "/", element: <HomePage /> },
+ { path: "/", element: <Navigate to="/login" replace /> },
  { path: "/login", element: <LoginPage /> },
  { path: "/forgot-password", element: <ForgotPasswordPage /> },
  { path: "/reset-password", element: <ResetPasswordPage /> },

@@ -1,1 +1,0 @@
-export { HealthScoreGauge } from "@shared/features/analytics/components/HealthScoreGauge";

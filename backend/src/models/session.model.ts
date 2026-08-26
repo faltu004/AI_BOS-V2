@@ -19,7 +19,7 @@ const sessionSchema = new Schema<Session>(
     user: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
     refreshTokenJti: { type: String, required: true, unique: true, index: true },
     status: { type: String, enum: ["active", "revoked", "expired"], default: "active", index: true },
-    expiresAt: { type: Date, required: true, index: true },
+    expiresAt: { type: Date, required: true, expires: 0 },
     userAgent: { type: String, maxlength: 512 },
     ip: { type: String, maxlength: 64 },
     deviceId: { type: Schema.Types.ObjectId, ref: "Device", index: true },

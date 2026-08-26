@@ -11,6 +11,7 @@ export type JwtReadySession = {
  email: string;
  role: AuthRole;
  fullName: string;
+ permissions?: string[];
  companyName?: string;
  isProfileComplete: boolean;
  mustChangePassword: boolean;

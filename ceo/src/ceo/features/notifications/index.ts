@@ -1,1 +1,0 @@
-export { NotificationCenterPage } from "./NotificationCenterPage";

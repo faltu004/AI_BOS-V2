@@ -1,4 +1,4 @@
-﻿export type PermissionModule =
+export type PermissionModule =
   | "Organization"
   | "Department"
   | "Branch"
@@ -144,6 +144,7 @@ export const permissionCatalog: PermissionCatalogEntry[] = [
   // Backup
   { key: "backup.manage", module: "Backup", label: "Manage backups", description: "Run, schedule, download, and restore system backups." },
   // Device Security
+  { key: "security.view", module: "Device Security", label: "View security dashboard", description: "View security dashboard, login history, and security events." },
   { key: "device.credential.view", module: "Device Security", label: "View device credentials", description: "View managed-device credential metadata and security status." },
   { key: "device.credential.rotate", module: "Device Security", label: "Rotate device credentials", description: "Authorize secure rotation of managed-device authentication credentials." },
   { key: "device.credential.revoke", module: "Device Security", label: "Revoke device credentials", description: "Revoke a managed-device credential and block future per-device authentication." },  { key: "device.auth.migration_status", module: "Device Security", label: "View device auth migration status", description: "View legacy authentication compatibility and strict-cutover configuration status." },

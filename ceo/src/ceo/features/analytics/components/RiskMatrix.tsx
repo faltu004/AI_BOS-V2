@@ -1,1 +1,0 @@
-export { RiskMatrix } from "@shared/features/analytics/components/RiskMatrix";

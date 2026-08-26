@@ -1,1 +1,0 @@
-export * from "@shared/features/analytics/analytics.data";

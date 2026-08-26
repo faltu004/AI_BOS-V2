@@ -1,4 +1,4 @@
-import { AlertTriangle, Database, Download, FileText, HardDrive, History, Play, RefreshCw, Save } from "lucide-react";
+import { AlertTriangle, Database, Download, FileText, HardDrive, History, Play, RefreshCw, Save, Shield } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getStoredAuthSession } from "@shared/auth/auth-service";
 import { getApiBaseUrl } from "@shared/lib/env";
@@ -137,6 +137,26 @@ export function AuditBackupPage() {
  toast({ title: "Restore failed", description: (error as Error).message, type: "error" });
  }
  }
+
+ async function handleDownloadBackup(record: BackupRecord) {
+    if (!token) return;
+    try {
+      const response = await fetch(`${apiBaseUrl}/backup/${record._id}/download`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error(`Download failed (${response.status})`);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      const date = new Date(record.startedAt).toISOString().slice(0, 10);
+      link.download = `aibos-backup-${record.type}-${date}.enc`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast({ title: "Download failed", description: (error as Error).message, type: "error" });
+    }
+  }
 
  async function handleScheduleChange(type: BackupType, input: { isEnabled?: boolean; frequency?: "daily" | "weekly" }) {
  if (!token) return;
@@ -315,10 +335,16 @@ export function AuditBackupPage() {
  )}
  </div>
  {record.status === "completed" && (
+ <div className="flex gap-2">
+ <Button size="sm" variant="outline" type="button" onClick={() => handleDownloadBackup(record)}>
+ <Download className="h-3.5 w-3.5" />
+ Download
+ </Button>
  <Button size="sm" variant="outline" type="button" onClick={() => handleRestore(record)}>
  <RefreshCw className="h-3.5 w-3.5" />
  Restore
  </Button>
+ </div>
  )}
  </Card>
  ))}

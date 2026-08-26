@@ -3,6 +3,7 @@ import { getStoredAuthSession, isSessionExpired, refreshSession } from "../auth/
 
 export type ModuleAccess = {
  adminPanelEnabled: boolean;
+ administratorControlMode?: "full_control" | "read_only";
 };
 
 async function authHeader(): Promise<Record<string, string>> {
@@ -21,7 +22,7 @@ export async function fetchModuleAccess(): Promise<ModuleAccess | null> {
  });
  if (!response.ok) return null;
  const json = await response.json().catch(() => null);
- return (json?.data?.moduleAccess as ModuleAccess | undefined) ?? { adminPanelEnabled: true };
+ return (json?.data?.moduleAccess as ModuleAccess | undefined) ?? { adminPanelEnabled: true, administratorControlMode: "full_control" };
  } catch {
  return null;
  }
