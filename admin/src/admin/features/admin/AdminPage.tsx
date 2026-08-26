@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ThemeToggle } from "@shared/ui/ThemeToggle";
 import { Button } from "@shared/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@shared/ui/card";
+import { Card, CardContent } from "@shared/ui/card";
 import { useConfirm } from "@shared/ui/confirm-dialog-context";
 import { Input } from "@shared/ui/input";
 import { liveSyncIntervalMs, sharedDataChangedEvent } from "@shared/realtime/data-sync";

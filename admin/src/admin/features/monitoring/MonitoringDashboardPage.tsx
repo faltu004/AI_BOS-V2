@@ -168,8 +168,8 @@ export function MonitoringDashboardPage() {
  <p className="text-sm text-muted-foreground">Health, performance, alerts, and business KPIs in one view.</p>
  </div>
  <div className="flex items-center gap-2">
- <Button onClick={() => void loadOverview()} size="sm" type="button" variant="outline">
- <RefreshCw className="mr-2 h-4 w-4" />
+ <Button disabled={loading} onClick={() => void loadOverview()} size="sm" type="button" variant="outline">
+ <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
  Refresh
  </Button>
  <ExportMenu onExportPDF={async () => console.log("pdf")} onExportCSV={async () => console.log("csv")} />

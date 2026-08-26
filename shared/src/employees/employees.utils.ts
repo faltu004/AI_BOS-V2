@@ -13,7 +13,8 @@ export function getEmployeeDashboardStats(employees: Employee[], attendance: Att
  };
 }
 
-export function formatMoney(value: number) {
+export function formatMoney(value: number | null | undefined) {
+ if (value === null || value === undefined) return "Not recorded";
  return new Intl.NumberFormat("en-US", {
  currency: "USD",
  maximumFractionDigits: 0,

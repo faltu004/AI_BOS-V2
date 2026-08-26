@@ -3,7 +3,7 @@ import type { AuthRole } from "@shared/auth/types";
 import { getApiBaseUrl } from "@shared/lib/env";
 import { formatClockTime } from "@shared/lib/utils-helpers";
 import { notifyLocalDataChanged } from "@shared/realtime/data-sync";
-import type { AttendanceRecord, Department, Employee, EmployeeFormInput, EmployeeManager } from "./employees.types";
+import type { AttendanceRecord, Department, Employee, EmployeeFormInput, EmployeeManager, Holiday } from "./employees.types";
 
 export type EmployeesResult<T> = { status: "ok"; data: T } | { status: "forbidden" } | { status: "error" };
 
@@ -106,7 +106,7 @@ function fallbackInitials(name: string) {
 }
 
 export function toEmployee(record: BackendEmployee): Employee {
- const annualCtc = record.salaryDetails?.annualCtc ?? 0;
+ const annualCtc = record.salaryDetails?.annualCtc ?? null;
  return {
  id: record.id,
  employeeCode: record.employeeCode ?? `EMP-${record.id.slice(-6).toUpperCase()}`,
@@ -140,11 +140,11 @@ export function toEmployee(record: BackendEmployee): Employee {
  documents: record.documents ?? [],
  salaryDetails: {
  annualCtc,
- monthlySalary: record.salaryDetails?.monthlySalary ?? Math.round(annualCtc / 12),
+ monthlySalary: record.salaryDetails?.monthlySalary ?? (annualCtc === null ? null : Math.round(annualCtc / 12)),
  bank: record.salaryDetails?.bank ?? "Not added",
  taxId: record.salaryDetails?.taxId ?? "Not added",
  },
- performanceScore: record.performanceScore ?? 75,
+ performanceScore: record.performanceScore,
  };
 }
 
@@ -225,6 +225,27 @@ export async function fetchDepartments() {
  memberCount: department.memberCount ?? 0,
  })),
  } satisfies EmployeesResult<DepartmentOption[]>;
+}
+
+type BackendHoliday = {
+ id?: string;
+ _id?: string;
+ name: string;
+ date: string;
+ type: string;
+};
+
+export async function fetchHolidays() {
+ const result = await fetchJson<{ items: BackendHoliday[] }>("/organization/holidays?limit=200");
+ if (result.status !== "ok") return result;
+ return {
+ status: "ok",
+ data: result.data.items.map((holiday) => ({
+ name: holiday.name,
+ date: holiday.date.slice(0, 10),
+ type: holiday.type,
+ })),
+ } satisfies EmployeesResult<Holiday[]>;
 }
 
 export async function createDepartment(input: { name: string; description?: string; headId: string }): Promise<Department> {

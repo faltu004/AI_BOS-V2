@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, ChevronRight, Clock3, Download, ExternalLink, LayoutDashboard, Loader2, LogOut, MessageSquare, Moon, Search, Star, Sun, UserCircle, Zap } from "lucide-react";
 import { Link, Route, Routes, useLocation } from "react-router-dom";
 import { filterByRole, getStoredAuthRole, RequireAuth } from "@shared/auth/access-control";
-import { clearAuthSession, getStoredAuthSession } from "@shared/auth/auth-service";
+import { authSessionChangedEvent, clearAuthSession, getStoredAuthSession } from "@shared/auth/auth-service";
 import type { AuthRole } from "@shared/auth/types";
 import { fetchRooms } from "@shared/collaboration/collaboration.api";
 import type { CollaborationRoom } from "@shared/collaboration/collaboration.schema";
@@ -117,7 +117,14 @@ function useVisibleWorkspaceControls({
   searchItems: readonly WorkspaceSearchItem[];
 }) {
   const location = useLocation();
-  const currentRole = useMemo(() => getStoredAuthRole(), [location.key]);
+  const [currentRole, setCurrentRole] = useState<AuthRole | undefined>(() => getStoredAuthRole());
+
+  useEffect(() => {
+    const refreshRole = () => setCurrentRole(getStoredAuthRole());
+    refreshRole();
+    window.addEventListener(authSessionChangedEvent, refreshRole);
+    return () => window.removeEventListener(authSessionChangedEvent, refreshRole);
+  }, [location.key]);
 
   return useMemo(
     () => ({
@@ -252,6 +259,16 @@ function readStoredPages(key: string) {
   } catch {
     return [];
   }
+}
+
+function isAllowedStoredPage(item: StoredPageItem, items: readonly WorkspaceSearchItem[]) {
+  return items.some(
+    (workspaceItem) => item.href === workspaceItem.href || item.href.startsWith(`${workspaceItem.href}/`),
+  );
+}
+
+function readAllowedStoredPages(key: string, items: readonly WorkspaceSearchItem[]) {
+  return readStoredPages(key).filter((item) => isAllowedStoredPage(item, items));
 }
 
 function downloadJson(filename: string, data: unknown) {
@@ -544,8 +561,8 @@ function ExportMenu({
                   runExport(() =>
                     downloadJson("quick-access-pages.json", {
                       exportedAt: new Date().toISOString(),
-                      favorites: readStoredPages(favoritePagesStorageKey),
-                      recentPages: readStoredPages(recentPagesStorageKey),
+                      favorites: readAllowedStoredPages(favoritePagesStorageKey, items),
+                      recentPages: readAllowedStoredPages(recentPagesStorageKey, items),
                     }),
                   )
                 }
@@ -563,9 +580,11 @@ function ExportMenu({
 
 function QuickWorkspaceMenu({
   currentPage,
+  items,
   quickActions,
 }: {
   currentPage?: StoredPageItem;
+  items: readonly WorkspaceSearchItem[];
   quickActions: readonly QuickCreateAction[];
 }) {
   const [open, setOpen] = useState(false);
@@ -581,9 +600,9 @@ function QuickWorkspaceMenu({
 
   useEffect(() => {
     if (!open) return;
-    setFavorites(readStoredPages(favoritePagesStorageKey));
-    setRecentPages(readStoredPages(recentPagesStorageKey));
-  }, [open]);
+    setFavorites(readAllowedStoredPages(favoritePagesStorageKey, items));
+    setRecentPages(readAllowedStoredPages(recentPagesStorageKey, items));
+  }, [items, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -926,7 +945,7 @@ function GlobalTopBar({ items, quickActions }: { items: readonly WorkspaceSearch
             <Search className="h-4 w-4" />
           </button>
           <CompanyMessageMenu messengerItem={messengerItem} />
-          <QuickWorkspaceMenu currentPage={currentPage} quickActions={quickActions} />
+          <QuickWorkspaceMenu currentPage={currentPage} items={items} quickActions={quickActions} />
           <div className="hidden sm:block">
             <ExportMenu items={items} onDashboard={onDashboard} quickActions={quickActions} />
           </div>

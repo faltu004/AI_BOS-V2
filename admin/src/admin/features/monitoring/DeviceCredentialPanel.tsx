@@ -22,6 +22,10 @@ import {
   CardTitle,
 } from "@shared/ui/card";
 
+import { Input } from "@shared/ui/input";
+import { Label } from "@shared/ui/label";
+import { useConfirm } from "@shared/ui/confirm-dialog-context";
+
 import { formatDateTime } from "@shared/lib/utils-helpers";
 
 import {
@@ -30,6 +34,108 @@ import {
   revokeDeviceCredential,
   type DeviceCredentialStatus,
 } from "./monitoring.api";
+
+/*
+ * The Rotate action previously used the native browser prompt and
+ * confirm dialogs to collect the rotation reason and confirm the
+ * action. The native prompt dialog is not used anywhere else in this
+ * codebase (the native confirm dialog alone is used elsewhere and is
+ * known to work in the packaged Electron renderer), and native prompt
+ * dialogs are unreliable/unsupported in many Electron BrowserWindow
+ * configurations -- when unsupported, that call returns null
+ * immediately with no error, which the previous handler silently
+ * treated as "user cancelled," so clicking Rotate Credential did
+ * nothing at all: no error shown, no network request ever sent. This
+ * in-app modal replaces both native dialogs with the same proven UI
+ * primitives (Input/Label, useConfirm) already used successfully
+ * elsewhere in this app (for example the Software
+ * Catalog enable/disable confirmation).
+ */
+function RotateCredentialModal({
+  deviceId,
+  onClose,
+  onSubmit,
+  submitting,
+}: {
+  deviceId: string;
+  onClose: () => void;
+  onSubmit: (reason: string) => void;
+  submitting: boolean;
+}) {
+  const [reason, setReason] = useState(
+    "Scheduled security rotation",
+  );
+
+  const [formError, setFormError] =
+    useState<string | null>(null);
+
+  return (
+    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-foreground/30 p-4">
+      <form
+        className="w-full max-w-md rounded-lg border bg-background p-5 shadow-glass"
+        onSubmit={(event) => {
+          event.preventDefault();
+
+          const trimmed = reason.trim();
+
+          if (trimmed.length < 3) {
+            setFormError(
+              "A rotation reason of at least 3 characters is required.",
+            );
+            return;
+          }
+
+          onSubmit(trimmed);
+        }}
+      >
+        <h2 className="text-lg font-bold">
+          Rotate Device Credential
+        </h2>
+
+        <p className="mt-2 text-sm text-muted-foreground">
+          Request credential rotation for device {deviceId}. The device
+          will complete the rotation automatically the next time it
+          checks in.
+        </p>
+
+        {formError && (
+          <div className="mt-3 rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-600 dark:text-rose-400">
+            {formError}
+          </div>
+        )}
+
+        <div className="mt-4 space-y-2">
+          <Label htmlFor="rotation-reason">
+            Reason (visible in the audit trail)
+          </Label>
+          <Input
+            autoFocus
+            id="rotation-reason"
+            onChange={(event) => {
+              setReason(event.target.value);
+              setFormError(null);
+            }}
+            value={reason}
+          />
+        </div>
+
+        <div className="mt-6 flex justify-end gap-3">
+          <Button
+            disabled={submitting}
+            onClick={onClose}
+            type="button"
+            variant="outline"
+          >
+            Cancel
+          </Button>
+          <Button disabled={submitting} type="submit">
+            {submitting ? "Requesting..." : "Request Rotation"}
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+}
 
 type DeviceCredentialPanelProps = {
   deviceId: string;
@@ -50,6 +156,8 @@ export function DeviceCredentialPanel({
   deviceId,
   token,
 }: DeviceCredentialPanelProps) {
+  const { confirm } = useConfirm();
+
   const [status, setStatus] =
     useState<DeviceCredentialStatus | null>(null);
 
@@ -60,6 +168,9 @@ export function DeviceCredentialPanel({
     useState(false);
 
   const [revoking, setRevoking] =
+    useState(false);
+
+  const [showRotateModal, setShowRotateModal] =
     useState(false);
 
   const [error, setError] =
@@ -94,33 +205,7 @@ export function DeviceCredentialPanel({
     void loadStatus();
   }, [loadStatus]);
 
-  async function handleRotationRequest() {
-    const reason = window.prompt(
-      "Reason for rotating this device's credential (visible in the audit trail):",
-      "Scheduled security rotation",
-    );
-
-    if (reason === null) {
-      return;
-    }
-
-    const trimmedReason = reason.trim();
-
-    if (trimmedReason.length < 3) {
-      setError("A rotation reason of at least 3 characters is required.");
-      return;
-    }
-
-    const confirmed = window.confirm(
-      "Request credential rotation for device " +
-        deviceId +
-        "? The device will rotate its credential automatically the next time it checks in.",
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
+  async function submitRotationRequest(reason: string) {
     setRotating(true);
     setError(null);
     setMessage(null);
@@ -128,9 +213,11 @@ export function DeviceCredentialPanel({
     try {
       const result = await requestDeviceCredentialRotation(
         deviceId,
-        trimmedReason,
+        reason,
         token,
       );
+
+      setShowRotateModal(false);
 
       setMessage(
         "Credential rotation requested at " +
@@ -151,11 +238,15 @@ export function DeviceCredentialPanel({
   }
 
   async function handleRevoke() {
-    const confirmed = window.confirm(
-      "Revoke the device credential for " +
+    const confirmed = await confirm({
+      title: "Revoke device credential?",
+      description:
+        "This immediately blocks device " +
         deviceId +
-        "? This immediately blocks the device from authenticating until it is re-enrolled. This cannot be undone.",
-    );
+        " from authenticating until it is physically re-enrolled. This cannot be undone.",
+      confirmLabel: "Revoke Credential",
+      tone: "danger",
+    });
 
     if (!confirmed) {
       return;
@@ -310,7 +401,7 @@ export function DeviceCredentialPanel({
             <div className="flex flex-wrap gap-2">
               <Button
                 disabled={isRevoked || rotating || revoking}
-                onClick={() => void handleRotationRequest()}
+                onClick={() => setShowRotateModal(true)}
                 size="sm"
                 type="button"
                 variant="outline"
@@ -343,6 +434,15 @@ export function DeviceCredentialPanel({
           </>
         )}
       </CardContent>
+
+      {showRotateModal && (
+        <RotateCredentialModal
+          deviceId={deviceId}
+          onClose={() => setShowRotateModal(false)}
+          onSubmit={(reason) => void submitRotationRequest(reason)}
+          submitting={rotating}
+        />
+      )}
     </Card>
   );
 }

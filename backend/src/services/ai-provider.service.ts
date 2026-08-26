@@ -1,59 +1,145 @@
 import { env } from "../config/env.js";
+import { AppError } from "../utils/app-error.js";
 
-type ChatMessage = {
+export type AIChatMessage = {
   role: "system" | "user" | "assistant";
   content: string;
 };
 
-export type AIProviderResult = {
-  answer: string;
-  usedFallback: boolean;
+export type AIProviderStatus = {
+  configured: boolean;
+  provider: "disabled" | "ollama" | "openai-compatible";
+  model?: string;
+  reason?: string;
 };
 
-/**
- * Never echo the raw context object back to the user here — `context` can carry
- * salary/tax fields for other employees (legitimately scoped for Owner/Administrator
- * by ai-context.service.ts), and a chat transcript is the wrong place to surface that
- * verbatim even when the viewer is allowed to see it elsewhere in the app.
- */
-function fallbackAnswer() {
-  return "The AI assistant's local model (Ollama) isn't running right now, so I can't generate an answer. Please try again once it's available, or contact your administrator.";
+export type AIProviderResult = {
+  answer: string;
+  provider: Exclude<AIProviderStatus["provider"], "disabled">;
+  model: string;
+};
+
+function endpoint(baseUrl: string, path: string) {
+  return `${baseUrl.replace(/\/+$/, "")}${path}`;
+}
+
+function providerStatus(): AIProviderStatus {
+  if (env.AI_PROVIDER === "disabled") {
+    return {
+      configured: false,
+      provider: "disabled",
+      reason: "AI provider is not configured on the backend.",
+    };
+  }
+
+  if (!env.AI_PROVIDER_BASE_URL || !env.AI_PROVIDER_MODEL) {
+    return {
+      configured: false,
+      provider: env.AI_PROVIDER,
+      reason: "AI provider URL and model must be configured on the backend.",
+    };
+  }
+
+  if (env.AI_PROVIDER === "openai-compatible" && !env.AI_PROVIDER_API_KEY) {
+    return {
+      configured: false,
+      provider: env.AI_PROVIDER,
+      model: env.AI_PROVIDER_MODEL,
+      reason: "The configured AI provider requires a backend API key.",
+    };
+  }
+
+  return {
+    configured: true,
+    provider: env.AI_PROVIDER,
+    model: env.AI_PROVIDER_MODEL,
+  };
 }
 
 export class AIProviderService {
-  async chat(messages: ChatMessage[]): Promise<AIProviderResult> {
-    const ollamaBaseUrl = env.OLLAMA_BASE_URL;
-    const model = env.OLLAMA_MODEL;
+  getStatus(): AIProviderStatus {
+    return providerStatus();
+  }
+
+  async chat(messages: AIChatMessage[]): Promise<AIProviderResult> {
+    const status = this.getStatus();
+
+    if (!status.configured || status.provider === "disabled" || !status.model || !env.AI_PROVIDER_BASE_URL) {
+      throw new AppError(status.reason ?? "AI provider is not configured on the backend.", 503);
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), env.AI_REQUEST_TIMEOUT_MS);
 
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), env.AI_REQUEST_TIMEOUT_MS);
-      const response = await fetch(`${ollamaBaseUrl}/api/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          model,
-          stream: false,
-          messages,
-          options: {
-            temperature: 0.2,
-            num_ctx: 8192,
+      const isOllama = status.provider === "ollama";
+      const response = await fetch(
+        endpoint(env.AI_PROVIDER_BASE_URL, isOllama ? "/api/chat" : "/chat/completions"),
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(!isOllama && env.AI_PROVIDER_API_KEY
+              ? { Authorization: `Bearer ${env.AI_PROVIDER_API_KEY}` }
+              : {}),
           },
-        }),
-      });
-      clearTimeout(timeout);
+          signal: controller.signal,
+          body: JSON.stringify(
+            isOllama
+              ? {
+                  model: status.model,
+                  stream: false,
+                  think: false,
+                  keep_alive: "30m",
+                  messages,
+                  options: {
+                    temperature: 0.1,
+                    num_ctx: 8192,
+                    num_predict: env.AI_MAX_OUTPUT_TOKENS,
+                  },
+                }
+              : {
+                  model: status.model,
+                  messages,
+                  temperature: 0.1,
+                  max_tokens: env.AI_MAX_OUTPUT_TOKENS,
+                },
+          ),
+        },
+      );
 
       if (!response.ok) {
-        throw new Error(`Ollama responded with ${response.status}`);
+        throw new AppError("The AI provider rejected the request.", 502);
       }
 
-      const json = (await response.json()) as { message?: { content?: string }; response?: string };
-      const answer = json.message?.content ?? json.response;
-      if (!answer?.trim()) throw new Error("Empty local model response");
-      return { answer: answer.trim(), usedFallback: false };
-    } catch {
-      return { answer: fallbackAnswer(), usedFallback: true };
+      const json = (await response.json()) as {
+        message?: { content?: string };
+        response?: string;
+        choices?: Array<{ message?: { content?: string } }>;
+      };
+      const answer = isOllama
+        ? json.message?.content ?? json.response
+        : json.choices?.[0]?.message?.content;
+
+      if (!answer?.trim()) {
+        throw new AppError("The AI provider returned an empty response.", 502);
+      }
+
+      return {
+        answer: answer.trim(),
+        provider: status.provider,
+        model: status.model,
+      };
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new AppError("The AI provider request timed out.", 504);
+      }
+
+      throw new AppError("The AI provider is currently unavailable.", 503);
+    } finally {
+      clearTimeout(timeout);
     }
   }
 }

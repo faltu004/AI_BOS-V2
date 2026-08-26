@@ -3,10 +3,11 @@ import { model, Schema, type HydratedDocument, type Types } from "mongoose";
 export type FaceEnrollmentStatus = "active" | "revoked" | "reset_required";
 
 export type FaceEnrollmentQualityCheck = {
-  facePresent: boolean;
-  singleFace: boolean;
-  imageQuality: "pass" | "fail";
-  liveness: "pass" | "fail" | "not_supported";
+  faceScore: number;
+  real: number;
+  live: number;
+  faceSize: number;
+  pose?: { roll: number; yaw: number; pitch: number } | null;
 };
 
 export type FaceEnrollment = {
@@ -31,10 +32,15 @@ export type FaceEnrollmentDocument = HydratedDocument<FaceEnrollment>;
 
 const qualityCheckSchema = new Schema<FaceEnrollmentQualityCheck>(
   {
-    facePresent: { type: Boolean, required: true },
-    singleFace: { type: Boolean, required: true },
-    imageQuality: { type: String, enum: ["pass", "fail"], required: true },
-    liveness: { type: String, enum: ["pass", "fail", "not_supported"], required: true },
+    faceScore: { type: Number, required: true, min: 0, max: 1 },
+    real: { type: Number, required: true, min: 0, max: 1 },
+    live: { type: Number, required: true, min: 0, max: 1 },
+    faceSize: { type: Number, required: true, min: 1 },
+    pose: {
+      roll: { type: Number },
+      yaw: { type: Number },
+      pitch: { type: Number },
+    },
   },
   { _id: false },
 );

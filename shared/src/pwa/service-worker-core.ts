@@ -44,6 +44,7 @@ export function initServiceWorker() {
  Promise.all([
  self.clients.claim(),
  caches.delete("api-get-cache"),
+ caches.delete("api-get-cache-v2"),
  ]),
  );
  });

@@ -1,7 +1,7 @@
 {
   "name": "ai-bos",
   "private": true,
-  "version": "0.1.0-rc.2",
+  "version": "1.0.0",
   "description": "AI BOS Business Operating System",
   "author": "WorknAI Technology Pvt Ltd",
   "type": "module",

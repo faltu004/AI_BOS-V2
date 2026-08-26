@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Mandatory = $true)]
     [string]$InstallRoot
 )
@@ -7,6 +7,13 @@ $ErrorActionPreference = "Stop"
 
 $logRoot = Join-Path $env:ProgramData "AI BOS\InstallLogs"
 $logPath = Join-Path $logRoot "employee-session-helper-install.log"
+$cleanupScript = Join-Path $PSScriptRoot "session-helper-task-cleanup.ps1"
+
+if (-not (Test-Path -LiteralPath $cleanupScript -PathType Leaf)) {
+    throw "Session Helper task cleanup helper was not found at $cleanupScript."
+}
+
+. $cleanupScript
 
 function Write-InstallLog {
     param([string]$Message)
@@ -43,60 +50,6 @@ function Convert-IdentityToSid {
     }
 }
 
-function Convert-TaskTextForComparison {
-    param([AllowNull()][string]$Value)
-
-    if ([string]::IsNullOrWhiteSpace($Value)) {
-        return ""
-    }
-
-    return $Value.Trim().Trim('"').Replace("/", "\").ToLowerInvariant()
-}
-
-function Test-LegacySessionHelperOwnership {
-    param(
-        [Parameter(Mandatory = $true)]
-        $Task
-    )
-
-    $legacyRoot = "c:\ai-bos\deviceagent"
-    foreach ($action in @($Task.Actions)) {
-        $taskText = @(
-            $action.Execute,
-            $action.Arguments,
-            $action.WorkingDirectory
-        ) | ForEach-Object {
-            Convert-TaskTextForComparison -Value $_
-        }
-
-        foreach ($value in $taskText) {
-            if ($value.Contains($legacyRoot)) {
-                return $true
-            }
-        }
-    }
-
-    return $false
-}
-
-function Remove-OwnedLegacySessionHelperTask {
-    $legacyTaskName = "AI BOS User Session Helper"
-    $legacyTask = Get-ScheduledTask -TaskName $legacyTaskName -ErrorAction SilentlyContinue
-
-    if ($null -eq $legacyTask) {
-        Write-InstallLog "Legacy Session Helper task was not present."
-        return
-    }
-
-    if (-not (Test-LegacySessionHelperOwnership -Task $legacyTask)) {
-        Write-InstallLog "Legacy Session Helper task exists but does not target C:\AI-BOS\DeviceAgent; leaving it unchanged."
-        return
-    }
-
-    Unregister-ScheduledTask -TaskName $legacyTaskName -TaskPath $legacyTask.TaskPath -Confirm:$false
-    Write-InstallLog "Removed owned legacy Session Helper task: $legacyTaskName."
-}
-
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = [Security.Principal.WindowsPrincipal]::new($identity)
 $isAdmin = $principal.IsInRole(
@@ -111,6 +64,9 @@ try {
     $taskName = "AI BOS Session Helper"
     $helperScript = Join-Path $InstallRoot "agent\dist\session-helper.js"
     $nodeExe = Join-Path $InstallRoot "runtime\node.exe"
+    $hiddenLauncher = Join-Path $InstallRoot "install\session-helper-hidden.vbs"
+    $wscriptExe = Join-Path $env:WINDIR "System32\wscript.exe"
+    $launcherWorkingDirectory = Join-Path $InstallRoot "install"
     $agentWorkingDirectory = Join-Path $InstallRoot "agent"
     $usersSid = "S-1-5-32-545"
 
@@ -118,27 +74,39 @@ try {
 
     Assert-File -Path $helperScript -Label "Session Helper entry point"
     Assert-File -Path $nodeExe -Label "Bundled Node runtime"
+    Assert-File -Path $hiddenLauncher -Label "Session Helper hidden launcher"
     if (-not (Test-Path -LiteralPath $agentWorkingDirectory -PathType Container)) {
         throw "Device Agent working directory was not found at $agentWorkingDirectory."
     }
 
-    Remove-OwnedLegacySessionHelperTask
+    Remove-AiBosStaleUserSessionHelperTask `
+        -InstallRoot $InstallRoot `
+        -WriteLog ${function:Write-InstallLog} | Out-Null
+
+    $actionArguments = "`"$hiddenLauncher`" `"$InstallRoot`""
 
     $action = New-ScheduledTaskAction `
-        -Execute $nodeExe `
-        -Argument "--use-system-ca `"$helperScript`"" `
-        -WorkingDirectory $agentWorkingDirectory
+        -Execute $wscriptExe `
+        -Argument $actionArguments `
+        -WorkingDirectory $launcherWorkingDirectory
+    $interactiveUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 
-    $trigger = New-ScheduledTaskTrigger -AtLogOn
+    $trigger = New-ScheduledTaskTrigger `
+        -AtLogOn `
+        -User $interactiveUser
+    $trigger.Delay = "PT30S"
 
     $principalConfig = New-ScheduledTaskPrincipal `
-        -GroupId $usersSid `
+        -UserId $interactiveUser `
+        -LogonType Interactive `
         -RunLevel Limited
 
     $settings = New-ScheduledTaskSettingsSet `
         -AllowStartIfOnBatteries `
         -DontStopIfGoingOnBatteries `
         -StartWhenAvailable `
+        -RestartCount 3 `
+        -RestartInterval (New-TimeSpan -Minutes 1) `
         -ExecutionTimeLimit ([TimeSpan]::Zero)
 
     $task = New-ScheduledTask `
@@ -157,15 +125,15 @@ try {
     $registeredTrigger = $registeredTask.Triggers | Select-Object -First 1
     $registeredPrincipal = $registeredTask.Principal
 
-    if ($registeredAction.Execute -ne $nodeExe) {
+    if ($registeredAction.Execute -ne $wscriptExe) {
         throw "Session Helper task executable mismatch."
     }
 
-    if ($registeredAction.Arguments -ne "--use-system-ca `"$helperScript`"") {
+    if ($registeredAction.Arguments -ne $actionArguments) {
         throw "Session Helper task arguments mismatch."
     }
 
-    if ($registeredAction.WorkingDirectory -ne $agentWorkingDirectory) {
+    if ($registeredAction.WorkingDirectory -ne $launcherWorkingDirectory) {
         throw "Session Helper task working directory mismatch."
     }
 
@@ -173,19 +141,27 @@ try {
         throw "Session Helper task trigger is not enabled."
     }
 
-    $registeredGroupSid = Convert-IdentityToSid -Identity $registeredPrincipal.GroupId
-    if ($registeredGroupSid -ne $usersSid) {
-        throw "Session Helper task principal GroupId is $($registeredPrincipal.GroupId), expected $usersSid."
+    $registeredUserSid = Convert-IdentityToSid -Identity $registeredPrincipal.UserId
+    $expectedUserSid = Convert-IdentityToSid -Identity $interactiveUser
+
+    if ($registeredUserSid -ne $expectedUserSid) {
+        throw "Session Helper task UserId resolves to SID $registeredUserSid, expected $expectedUserSid."
+    }
+
+    if ($registeredPrincipal.LogonType -ne "Interactive") {
+        throw "Session Helper task LogonType is $($registeredPrincipal.LogonType), expected Interactive."
     }
 
     if ($registeredPrincipal.RunLevel -ne "Limited") {
         throw "Session Helper task RunLevel is $($registeredPrincipal.RunLevel), expected Limited."
     }
 
-    Write-InstallLog "AI BOS Session Helper task registered successfully. TaskName=$taskName GroupId=$usersSid RunLevel=Limited"
+    Write-InstallLog "AI BOS Session Helper task registered successfully. TaskName=$taskName UserId=$interactiveUser LogonType=Interactive RunLevel=Limited"
     exit 0
 } catch {
     Write-InstallLog "FAILED: $($_.Exception.Message)"
     Write-Error $_.Exception.Message
     exit 1
 }
+
+

@@ -7,15 +7,18 @@ import {
 import {
   RuntimeMigrationModel,
 } from "../models/runtime-migration.model.js";
+import { AttendanceModel } from "../models/attendance.model.js";
+import { FaceEnrollmentModel } from "../models/face-enrollment.model.js";
 import {
   UserModel,
 } from "../models/user.model.js";
 
 const administratorMonitoringAccessMigrationKey =
   "administrator-monitoring-access-v1";
+const biometricRetentionMigrationKey =
+  "face-attendance-biometric-retention-v2";
 
-export async function applyRuntimeMigrations():
-  Promise<void> {
+async function applyAdministratorMonitoringAccessMigration() {
   const applied =
     await RuntimeMigrationModel
       .findOne({
@@ -75,4 +78,27 @@ export async function applyRuntimeMigrations():
     appliedAt:
       new Date(),
   });
+}
+
+async function applyBiometricRetentionMigration() {
+  const applied = await RuntimeMigrationModel.findOne({ key: biometricRetentionMigrationKey }).lean();
+  if (applied) return;
+
+  // Legacy Face ID versions could retain PNG data in attendance documents.
+  // V2 stores descriptors only and removes inactive templates as part of the
+  // authorized deletion/replacement lifecycle.
+  await AttendanceModel.collection.updateMany(
+    {},
+    { $unset: { checkInFaceImage: "", checkOutFaceImage: "" } },
+  );
+  await FaceEnrollmentModel.collection.updateMany(
+    { status: { $ne: "active" } },
+    { $unset: { templateEncrypted: "", templateHash: "" } },
+  );
+  await RuntimeMigrationModel.create({ key: biometricRetentionMigrationKey, appliedAt: new Date() });
+}
+
+export async function applyRuntimeMigrations(): Promise<void> {
+  await applyAdministratorMonitoringAccessMigration();
+  await applyBiometricRetentionMigration();
 }

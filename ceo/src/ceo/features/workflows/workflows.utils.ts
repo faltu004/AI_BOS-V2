@@ -17,7 +17,7 @@ export function generateWorkflowId() {
  return `wf-${crypto.randomUUID().slice(0, 8)}`;
 }
 
-export function createWorkflowFromInput(input: WorkflowFormInput, workflows: Workflow[]): Workflow {
+export function createWorkflowFromInput(input: WorkflowFormInput, _workflows: Workflow[]): Workflow {
  const now = new Date().toISOString().slice(0, 10);
 
  return {
@@ -31,7 +31,6 @@ export function createWorkflowFromInput(input: WorkflowFormInput, workflows: Wor
 }
 
 export function getWorkflowStats(workflows: Workflow[]) {
- const now = new Date();
  return {
  total: workflows.length,
  active: workflows.filter((w) => w.status === "Active").length,

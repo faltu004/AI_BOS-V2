@@ -16,7 +16,6 @@ import {
  GripVertical,
  LayoutList,
  MessageSquareText,
- MoreVertical,
  Pause,
  Play,
  Plus,
@@ -72,10 +71,6 @@ const emptyForm: WorkflowFormInput = {
  tags: [],
 };
 
-function formatDate(value?: string) {
- if (!value) return "Never";
- return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
 
 function formatDateTime(value?: string) {
  return formatDateTimeShared(value);
@@ -145,7 +140,7 @@ function WorkflowCanvas({
  onSelectStep,
  onReorder,
  onRemoveStep,
- onUpdateStep,
+ onUpdateStep: _onUpdateStep,
 }: {
  steps: WorkflowStep[];
  selectedStepId?: string;

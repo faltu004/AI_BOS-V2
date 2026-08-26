@@ -18,9 +18,9 @@ export const profileDirectory: Record<AuthRole, ProfileIdentity> = {
  title: "Platform Administrator",
  },
  Manager: {
- name: "Rohan Kapoor",
- initials: "RK",
- title: "Delivery and Team Manager",
+ name: "Manager",
+ initials: "M",
+ title: "Manager",
  },
  HR: {
  name: "Ananya Iyer",

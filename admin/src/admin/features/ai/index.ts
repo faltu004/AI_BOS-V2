@@ -1,0 +1,1 @@
+export { AIPage } from "./AIPage";

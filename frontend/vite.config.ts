@@ -13,6 +13,7 @@ export default defineConfig({
       filename: "sw.ts",
       injectManifest: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
       },
       registerType: "prompt",
       includeAssets: ["icons/apple-touch-icon.png"],

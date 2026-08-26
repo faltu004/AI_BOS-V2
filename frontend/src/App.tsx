@@ -1,5 +1,15 @@
 import { AnimatedAppRoutes, AppProviders, lazyNamed, type AppRouteConfig } from "@shared/platform/AppShell";
-import { workspaceSearchItems, quickCreateActions, financeRoles, frontlineRoles, hrRoles, salesRoles } from "@/data/workspace";
+import {
+ employeeDirectoryRoles,
+ documentRoles,
+ financeRoles,
+ frontlineRoles,
+ hrRoles,
+ managerRoles,
+ quickCreateActions,
+ salesRoles,
+ workspaceSearchItems,
+} from "@/data/workspace";
 
 const HomePage = lazyNamed(() => import("@/pages/HomePage"), "HomePage");
 const LoginPage = lazyNamed(() => import("@/features/auth/login"), "LoginPage");
@@ -8,13 +18,17 @@ const ResetPasswordPage = lazyNamed(() => import("@/features/auth/pages/ResetPas
 const EmailVerificationPage = lazyNamed(() => import("@/features/auth/pages/EmailVerificationPage"), "EmailVerificationPage");
 const DashboardPage = lazyNamed(() => import("@/common/features/dashboard"), "DashboardPage");
 const ProfilePage = lazyNamed(() => import("@/common/features/profile"), "ProfilePage");
-const TasksPage = lazyNamed(() => import("@/common/features/tasks"), "TasksPage");
+const ProjectsPage = lazyNamed(() => import("@shared/projects"), "ProjectsPage");
+const ProjectDetailsPage = lazyNamed(() => import("@shared/projects"), "ProjectDetailsPage");
+const WorkflowsPage = lazyNamed(() => import("@shared/workflows"), "WorkflowsPage");
+const TasksPage = lazyNamed(() => import("@shared/tasks"), "TasksPage");
+const AnalyticsPage = lazyNamed(() => import("@shared/features/analytics"), "AnalyticsPage");
 const EmployeesPage = lazyNamed(() => import("@/hr/features/employees"), "EmployeesPage");
 const CrmPage = lazyNamed(() => import("@/sale/features/crm"), "CrmPage");
 const FinancePage = lazyNamed(() => import("@/sale/features/finance"), "FinancePage");
 const ProductsPage = lazyNamed(() => import("@/sale/features/products"), "ProductsPage");
 const DocumentsPage = lazyNamed(() => import("@/common/features/documents"), "DocumentsPage");
-const MeetingsPage = lazyNamed(() => import("@/common/features/meetings"), "MeetingsPage");
+const MeetingsPage = lazyNamed(() => import("@shared/meetings"), "MeetingsPage");
 const CollaborationHubPage = lazyNamed(() => import("@/common/features/collaboration"), "CollaborationHubPage");
 const NotificationCenterPage = lazyNamed(() => import("@/common/features/notifications"), "NotificationCenterPage");
 const TeamAccountsPage = lazyNamed(() => import("@/common/features/team-accounts"), "TeamAccountsPage");
@@ -38,13 +52,17 @@ const routes: AppRouteConfig[] = [
  { path: "/face-enrollment", element: <FaceEnrollmentPage />, allowedRoles: frontlineRoles, requireProfileComplete: false },
  { path: "/dashboard", element: <DashboardPage />, allowedRoles: frontlineRoles, requireProfileComplete: false },
  { path: "/profile", element: <ProfilePage />, allowedRoles: frontlineRoles, requireProfileComplete: false },
+ { path: "/projects", element: <ProjectsPage />, allowedRoles: managerRoles, requireProfileComplete: false },
+ { path: "/projects/:id", element: <ProjectDetailsPage />, allowedRoles: managerRoles, requireProfileComplete: false },
+ { path: "/workflows", element: <WorkflowsPage />, allowedRoles: managerRoles, requireProfileComplete: false },
  { path: "/tasks", element: <TasksPage />, allowedRoles: frontlineRoles, requireProfileComplete: false },
- { path: "/employees", element: <EmployeesPage />, allowedRoles: hrRoles, requireProfileComplete: false },
- { path: "/team-accounts", element: <TeamAccountsPage />, allowedRoles: frontlineRoles, requireProfileComplete: false },
+ { path: "/employees", element: <EmployeesPage />, allowedRoles: employeeDirectoryRoles, requireProfileComplete: false },
+ { path: "/analytics", element: <AnalyticsPage />, allowedRoles: managerRoles, requireProfileComplete: false },
+ { path: "/team-accounts", element: <TeamAccountsPage />, allowedRoles: hrRoles, requireProfileComplete: false },
  { path: "/crm", element: <CrmPage />, allowedRoles: salesRoles, requireProfileComplete: false },
  { path: "/finance", element: <FinancePage />, allowedRoles: financeRoles, requireProfileComplete: false },
  { path: "/products", element: <ProductsPage />, allowedRoles: salesRoles, requireProfileComplete: false },
- { path: "/documents", element: <DocumentsPage />, allowedRoles: frontlineRoles, requireProfileComplete: false },
+ { path: "/documents", element: <DocumentsPage />, allowedRoles: documentRoles, requireProfileComplete: false },
  { path: "/meetings", element: <MeetingsPage />, allowedRoles: frontlineRoles, requireProfileComplete: false },
  { path: "/messenger", element: <CollaborationHubPage />, allowedRoles: frontlineRoles, requireProfileComplete: false },
  { path: "/collaboration", element: <CollaborationHubPage />, allowedRoles: frontlineRoles, requireProfileComplete: false },

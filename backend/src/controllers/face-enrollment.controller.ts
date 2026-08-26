@@ -17,6 +17,15 @@ export class FaceEnrollmentController {
     sendSuccess(res, 201, { message: "Face enrollment completed successfully", data: status });
   };
 
+  deleteMe: RequestHandler = async (req, res) => {
+    const status = await faceEnrollmentService.deleteOwnEnrollment(req.user!.id, req.body, {
+      ip: req.ip,
+      userAgent: req.get("user-agent") ?? undefined,
+      deviceId: req.header("x-device-id") ?? undefined,
+    });
+    sendSuccess(res, 200, { message: "Face enrollment deleted successfully", data: status });
+  };
+
   userStatus: RequestHandler = async (req, res) => {
     const status = await faceEnrollmentService.getUserStatus(req.params.userId);
     sendSuccess(res, 200, { message: "Face enrollment status fetched successfully", data: status });

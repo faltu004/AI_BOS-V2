@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
  BarChart3,
  CheckCircle2,
@@ -15,6 +15,7 @@ import { Button } from "@shared/ui/button";
 import { Card, CardContent } from "@shared/ui/card";
 import { fetchOverviewAnalytics, fetchSalesAnalytics, type OverviewAnalytics, type SalesAnalytics } from "./analytics.api";
 import { AnalyticsCard } from "./components/AnalyticsCard";
+import { liveSyncIntervalMs, sharedDataChangedEvent } from "@shared/realtime/data-sync";
 
 const chartColors = {
  primary: "hsl(var(--primary))",
@@ -26,28 +27,47 @@ export function AnalyticsPage() {
  const [overview, setOverview] = useState<OverviewAnalytics | null>(null);
  const [sales, setSales] = useState<SalesAnalytics | null>(null);
  const [salesAccess, setSalesAccess] = useState<"ok" | "forbidden" | "error">("ok");
+ const loadSequenceRef = useRef(0);
 
- useEffect(() => {
- let cancelled = false;
-
- async function load() {
+ const loadAnalytics = useCallback(async () => {
+ const requestId = loadSequenceRef.current + 1;
+ loadSequenceRef.current = requestId;
  const [overviewResult, salesResult] = await Promise.all([fetchOverviewAnalytics(), fetchSalesAnalytics()]);
- if (cancelled) return;
+ if (requestId !== loadSequenceRef.current) return;
 
  if (overviewResult.status === "ok") {
  setOverview(overviewResult.data);
+ } else {
+ setOverview(null);
  }
  setSalesAccess(salesResult.status);
  if (salesResult.status === "ok") {
  setSales(salesResult.data);
+ } else {
+ setSales(null);
  }
- }
-
- void load();
- return () => {
- cancelled = true;
- };
  }, []);
+
+ useEffect(() => {
+ let active = true;
+ const refreshIfActive = () => {
+ if (active) void loadAnalytics();
+ };
+
+ void loadAnalytics();
+ const intervalId = window.setInterval(refreshIfActive, liveSyncIntervalMs);
+ window.addEventListener("focus", refreshIfActive);
+ window.addEventListener(sharedDataChangedEvent, refreshIfActive);
+ document.addEventListener("visibilitychange", refreshIfActive);
+ return () => {
+ active = false;
+ loadSequenceRef.current += 1;
+ window.clearInterval(intervalId);
+ window.removeEventListener("focus", refreshIfActive);
+ window.removeEventListener(sharedDataChangedEvent, refreshIfActive);
+ document.removeEventListener("visibilitychange", refreshIfActive);
+ };
+ }, [loadAnalytics]);
 
  const kpis = [
  { label: "Active Projects", value: overview ? String(overview.projects.active) : "—", change: overview ? `${overview.projects.delayed} delayed` : "Loading…", icon: FolderKanban },

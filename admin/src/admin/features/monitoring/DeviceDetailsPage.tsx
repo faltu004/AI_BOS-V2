@@ -218,9 +218,6 @@ export function DeviceDetailsPage() {
 
   const session = getStoredAuthSession();
   const token = session?.accessToken;
-  const canManageDeviceCredentials =
-    session?.user.role === "Owner" ||
-    session?.user.role === "Administrator";
 
   const [device, setDevice] =
     useState<ManagedDevice | null>(null);
@@ -451,7 +448,24 @@ export function DeviceDetailsPage() {
             <PermissionUnavailable title="Device Commands" />
           )}
 
-          {canManageDeviceCredentials ? (
+          {/*
+            No dedicated Administrator Monitoring Access permission
+            exists yet for device credential rotate/revoke. This is
+            the highest-impact device-security action available in
+            the UI, so it deliberately reuses "device.command.power"
+            (the strictest existing gate, otherwise used for remote
+            restart/shutdown) rather than a looser permission such as
+            "device.monitoring.view" or "device.command.view". Backend
+            authorization remains the actual source of truth: the
+            underlying rotate/revoke endpoints separately require
+            requireOwnerOrExplicitPermission("device.credential.rotate"
+            | "device.credential.revoke"), so this client-side gate
+            only controls whether the panel is shown before that
+            check is ever reached — it cannot grant access on its own.
+          */}
+          {hasPermission(
+            "device.command.power",
+          ) ? (
             <DeviceCredentialPanel
               deviceId={device.deviceId}
               token={token}

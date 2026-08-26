@@ -88,19 +88,19 @@ const profileConfigs: Record<AuthRole, RoleProfileConfig> = {
  },
  Manager: {
  ...profileDirectory.Manager,
- company: "AI Business Operating System",
- department: "Operations",
- employeeId: "AIBOS-MGR",
- email: "manager@aibos.company",
- phone: "+91 90000 10002",
- location: "India",
+ company: "",
+ department: "",
+ employeeId: "",
+ email: "",
+ phone: "",
+ location: "",
  stats: [
  { label: "Projects", value: "—", trend: "Loading…", icon: BriefcaseBusiness },
  { label: "Open Tasks", value: "—", trend: "Loading…", icon: BadgeCheck },
  { label: "Team Members", value: "—", trend: "Loading…", icon: UsersRound },
  ],
- skills: ["Projects", "Tasks", "Meetings", "Reports", "Team Planning", "Workflow Automation"],
- permissions: ["Manager dashboard", "Projects", "Tasks", "Meetings", "Analytics reports"],
+ skills: ["Projects", "Tasks", "Reports", "Team Planning", "Workflow Automation"],
+ permissions: ["Manager dashboard", "Projects", "Tasks", "Employees", "Workflows", "Analytics reports"],
  activity: [],
  },
  HR: {
@@ -204,89 +204,6 @@ const profileConfigs: Record<AuthRole, RoleProfileConfig> = {
  },
 };
 
-const nexoraProfileOverrides: Record<AuthRole, Partial<RoleProfileConfig>> = {
- Owner: {
- company: "Nexora Softworks Pvt. Ltd.",
- department: "Executive",
- employeeId: "NEX-2026-001",
- email: "aarav.mehta@nexorasoftworks.dev",
- phone: "+91 90080 51001",
- location: "Bengaluru HQ",
- },
- Administrator: {
- company: "Nexora Softworks Pvt. Ltd.",
- department: "Operations",
- employeeId: "NEX-2026-002",
- email: "isha.sinha@nexorasoftworks.dev",
- phone: "+91 90080 51002",
- location: "Bengaluru HQ",
- },
- Manager: {
- company: "Nexora Softworks Pvt. Ltd.",
- department: "Product",
- employeeId: "NEX-2026-003",
- email: "kabir.arora@nexorasoftworks.dev",
- phone: "+91 90080 51003",
- location: "Bengaluru HQ",
- },
- HR: {
- company: "Nexora Softworks Pvt. Ltd.",
- department: "Human Resources",
- employeeId: "NEX-2026-004",
- email: "naina.rao@nexorasoftworks.dev",
- phone: "+91 90080 51004",
- location: "Bengaluru HQ",
- },
- Sales: {
- company: "Nexora Softworks Pvt. Ltd.",
- department: "Sales",
- employeeId: "NEX-2026-006",
- email: "rhea.kapoor@nexorasoftworks.dev",
- phone: "+91 90080 51006",
- location: "Mumbai Client Office",
- },
- Employee: {
- company: "Nexora Softworks Pvt. Ltd.",
- department: "Engineering",
- employeeId: "NEX-2026-013",
- email: "arjun.nair@nexorasoftworks.dev",
- phone: "+91 90080 51013",
- location: "Bengaluru HQ",
- },
- Finance: {
- company: "Nexora Softworks Pvt. Ltd.",
- department: "Finance",
- employeeId: "NEX-2026-005",
- email: "devika.menon@nexorasoftworks.dev",
- phone: "+91 90080 51005",
- location: "Bengaluru HQ",
- },
- Support: {
- company: "Nexora Softworks Pvt. Ltd.",
- department: "Customer Success",
- employeeId: "NEX-2026-007",
- email: "manav.bansal@nexorasoftworks.dev",
- phone: "+91 90080 51007",
- location: "Bengaluru HQ",
- },
- Developer: {
- company: "Nexora Softworks Pvt. Ltd.",
- department: "Engineering",
- employeeId: "NEX-2026-008",
- email: "tara.kulkarni@nexorasoftworks.dev",
- phone: "+91 90080 51008",
- location: "Bengaluru HQ",
- },
- Guest: {
- company: "Nexora Softworks Pvt. Ltd.",
- department: "Executive",
- employeeId: "NEX-2026-018",
- email: "leena.thomas@nexorasoftworks.dev",
- phone: "+91 90080 51018",
- location: "Remote",
- },
-};
-
 function SectionCard({ children, subtitle, title }: { children: ReactNode; subtitle?: string; title: string }) {
  return (
  <Card className="glass rounded-lg">
@@ -338,12 +255,7 @@ function toFormState(profile: OwnProfileResult | null, fallback: { name: string;
 export function RoleProfilePage() {
  const session = getStoredAuthSession();
  const role = getProfileRole(session?.user.role);
- // `nexoraProfileOverrides` supplies generic per-role placeholder company/contact
- // info for demo accounts only — it must never overwrite the real signed-in
- // user's own email, since that would show fictional contact details for a
- // genuinely different person who happens to share this role.
- const isDemoAccount = session?.user.email === nexoraProfileOverrides[role]?.email;
- const config = { ...profileConfigs[role], ...(isDemoAccount ? nexoraProfileOverrides[role] : {}) };
+ const config = profileConfigs[role];
  const [email] = useState(session?.user.email ?? config.email);
  const [saved, setSaved] = useState(false);
  const [liveStats, setLiveStats] = useState<Record<string, { value: string; trend: string }>>({});
@@ -360,7 +272,20 @@ export function RoleProfilePage() {
  const displayName = profile?.fullName ?? session?.user.fullName ?? config.name;
  const initials = getInitials(displayName);
  const storedAvatar = profile?.avatar && profile.avatar.startsWith("data:image/") ? profile.avatar : null;
- const phone = form.phone;
+ const company = (profile?.companyName ?? session?.user.companyName ?? config.company) || "Not provided";
+ const designation = profile?.designation ?? config.title;
+ const department = config.department || "Not assigned";
+ const employeeId = (profile?.employeeCode ?? profile?.id ?? config.employeeId) || "Not available";
+ const exportConfig = {
+ ...config,
+ name: displayName,
+ company,
+ department,
+ employeeId,
+ email,
+ phone: form.phone,
+ location: form.location,
+ };
 
  const loadProfile = useCallback(async () => {
  setProfileLoading(true);
@@ -369,7 +294,7 @@ export function RoleProfilePage() {
  setProfile(data);
  setForm(toFormState(data, { name: session?.user.fullName ?? config.name, phone: config.phone, location: config.location }));
  } catch {
- // fall back to session/demo-config values already reflected in initial state
+ // Keep the authenticated session identity visible and leave unavailable fields honest.
  } finally {
  setProfileLoading(false);
  }
@@ -548,8 +473,8 @@ export function RoleProfilePage() {
  };
 
  const profileSummary = [
- { label: "Availability", value: "Active today", icon: CalendarCheck, tone: "text-emerald-600 dark:text-emerald-300" },
- { label: "Shift", value: "09:30 - 18:30 IST", icon: Clock3, tone: "text-sky-600 dark:text-sky-300" },
+ { label: "Profile", value: profileLoading ? "Loading" : profile ? "Backend verified" : "Backend unavailable", icon: CalendarCheck, tone: "text-emerald-600 dark:text-emerald-300" },
+ { label: "Account", value: email || "Not available", icon: Clock3, tone: "text-sky-600 dark:text-sky-300" },
  { label: "Access", value: `${role} workspace`, icon: ShieldCheck, tone: "text-primary" },
  { label: "Status", value: saved ? "Changes saved" : "Verified account", icon: Sparkles, tone: "text-amber-600 dark:text-amber-300" },
  ];
@@ -561,7 +486,7 @@ export function RoleProfilePage() {
  <div className="relative h-52 bg-[linear-gradient(120deg,rgba(15,23,42,0.82),rgba(37,99,235,0.66),rgba(16,185,129,0.38)),url('https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1400&q=75')] bg-cover bg-center">
  <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-card to-transparent" />
  <div className="absolute right-4 top-4 flex flex-wrap justify-end gap-2">
- <Button className="border bg-background/95 text-foreground hover:bg-background" onClick={() => downloadProfile(config, role)} size="sm" type="button">
+ <Button className="border bg-background/95 text-foreground hover:bg-background" onClick={() => downloadProfile(exportConfig, role)} size="sm" type="button">
  <Download className="h-4 w-4" />
  Export
  </Button>
@@ -622,7 +547,7 @@ export function RoleProfilePage() {
  <h1 className="mt-2 text-3xl font-bold">{displayName}</h1>
  )}
  <p className="mt-2 text-sm text-muted-foreground">
- {config.title} - {config.company}
+ {designation} - {company}
  </p>
  </div>
  <div className="flex flex-wrap gap-2">
@@ -744,10 +669,10 @@ export function RoleProfilePage() {
  <SectionCard subtitle="Company membership and role scope." title="Company Information">
  <div className="grid gap-4 sm:grid-cols-2">
  {[
- { label: "Company", value: config.company },
- { label: "Department", value: config.department },
+ { label: "Company", value: company },
+ { label: "Department", value: department },
  { label: "Role", value: role },
- { label: "Employee ID", value: config.employeeId },
+ { label: "Employee ID", value: employeeId },
  ].map((item) => (
  <div className="rounded-lg border bg-background p-4" key={item.label}>
  <p className="text-xs font-semibold uppercase text-muted-foreground">{item.label}</p>
@@ -769,6 +694,9 @@ export function RoleProfilePage() {
 
  <SectionCard title="Recent Activity">
  <div className="space-y-3">
+ {config.activity.length === 0 && (
+ <p className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">No live profile activity is available yet.</p>
+ )}
  {config.activity.map((item) => {
  const Icon = item.icon;
  return (

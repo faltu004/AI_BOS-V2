@@ -70,6 +70,7 @@ export type ProfessionalDashboardConfig = {
  activity: ProfessionalDashboardActivity[];
  insights: string[];
  focus: string[];
+ attendanceHref?: string;
 };
 
 function downloadJson(filename: string, data: unknown) {
@@ -196,22 +197,35 @@ function Sidebar({
  <MessageSquareText className="h-4 w-4 shrink-0" />
  {!effectiveCollapsed && <span className="truncate">AI Analyzer</span>}
  </button>
+ {config.attendanceHref ? (
+ <Link
+ aria-label={effectiveCollapsed ? "Attendance" : undefined}
+ className={cn(
+ "flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold text-muted-foreground transition-all hover:bg-muted hover:text-foreground",
+ effectiveCollapsed && "justify-center px-0",
+ )}
+ onClick={onCloseMobile}
+ to={config.attendanceHref}
+ title={effectiveCollapsed ? "Attendance" : undefined}
+ >
+ <CalendarCheck className="h-4 w-4 shrink-0" />
+ {!effectiveCollapsed && <span className="truncate">Attendance</span>}
+ </Link>
+ ) : (
  <button
  aria-label={effectiveCollapsed ? "Attendance" : undefined}
  className={cn(
  "flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold text-muted-foreground transition-all hover:bg-muted hover:text-foreground",
  effectiveCollapsed && "justify-center px-0",
  )}
- onClick={() => {
- onOpenAttendance();
- onCloseMobile();
- }}
+ onClick={() => { onOpenAttendance(); onCloseMobile(); }}
  title={effectiveCollapsed ? "Attendance" : undefined}
  type="button"
  >
  <CalendarCheck className="h-4 w-4 shrink-0" />
  {!effectiveCollapsed && <span className="truncate">Attendance</span>}
  </button>
+ )}
  <button
  aria-label={effectiveCollapsed ? "Logout" : undefined}
  className={cn(
@@ -405,6 +419,8 @@ export function ProfessionalDashboard({ config, leadingContent }: { config: Prof
  <CardContent className="space-y-3">
  {hiddenInsights ? (
  <p className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">Insights hidden for focus mode.</p>
+ ) : config.insights.length === 0 ? (
+ <p className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">No live insights are available yet.</p>
  ) : (
  config.insights.map((insight) => (
  <p className="rounded-lg border bg-background p-4 text-sm leading-6" key={insight}>
@@ -422,6 +438,9 @@ export function ProfessionalDashboard({ config, leadingContent }: { config: Prof
  <CardTitle>Priority Queue</CardTitle>
  </CardHeader>
  <CardContent className="space-y-3">
+ {config.queue.length === 0 && (
+ <p className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">No priority items are currently assigned.</p>
+ )}
  {config.queue.map((item) => {
  const isDone = completed.includes(item.title);
  return (
@@ -462,6 +481,9 @@ export function ProfessionalDashboard({ config, leadingContent }: { config: Prof
  </div>
  <div className="relative space-y-3">
  <div className="absolute bottom-4 left-5 top-4 w-px bg-border" />
+ {config.activity.length === 0 && (
+ <p className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">No live activity is available yet.</p>
+ )}
  {config.activity.map((item, index) => {
  const Icon = item.icon;
  return (
@@ -478,7 +500,7 @@ export function ProfessionalDashboard({ config, leadingContent }: { config: Prof
  </div>
  </div>
  </aside>
- <AttendanceDrawer onClose={() => setAttendanceOpen(false)} open={attendanceOpen} />
+ {!config.attendanceHref && <AttendanceDrawer onClose={() => setAttendanceOpen(false)} open={attendanceOpen} />}
  </div>
  </div>
  </div>

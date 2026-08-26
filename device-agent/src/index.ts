@@ -5,6 +5,10 @@ import {
   writeAgentHealthMarker,
 } from "./agent-health.js";
 import {
+  acquireAgentInstanceLock,
+  type AgentInstanceLock,
+} from "./agent-instance-lock.js";
+import {
   startDeviceCredentialRotationWatcher,
 } from "./device-credential-rotation.js";
 import {
@@ -60,6 +64,11 @@ let startupTimer:
 let startupRetryDelay =
   STARTUP_RETRY_DELAY;
 
+let instanceLock:
+  AgentInstanceLock |
+  null =
+    null;
+
 async function stopAllComponents():
   Promise<void> {
   const handlers =
@@ -110,6 +119,13 @@ async function shutdown(
   }
 
   await stopAllComponents();
+
+  if (instanceLock) {
+    await instanceLock.release();
+
+    instanceLock =
+      null;
+  }
 
   console.log(
     "[Agent] Shutdown complete.",
@@ -334,7 +350,40 @@ process.once(
   },
 );
 
-void start();
+async function launch():
+  Promise<void> {
+  /*
+   * Acquired once, for the life of
+   * this process, before the startup
+   * retry loop is ever entered. This
+   * is what prevents an orphaned
+   * duplicate process from retrying
+   * registration forever against a
+   * backend that will correctly keep
+   * rejecting it once a healthy
+   * instance is running.
+   */
+  const lock =
+    await acquireAgentInstanceLock();
+
+  if (!lock) {
+    console.error(
+      "[Agent] Another instance of this agent is already running. Exiting without starting registration or heartbeat.",
+    );
+
+    process.exitCode =
+      0;
+
+    return;
+  }
+
+  instanceLock =
+    lock;
+
+  void start();
+}
+
+void launch();
 
 
 

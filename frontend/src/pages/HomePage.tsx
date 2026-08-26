@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, useInView } from "framer-motion";
 import {
  ArrowRight,
@@ -11,8 +11,6 @@ import {
  Play,
  TrendingUp,
  UsersRound,
- Sparkles,
- Loader2,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Reveal } from "@/components/animation/Reveal";
@@ -20,7 +18,7 @@ import { Footer } from "@/components/layout/Footer";
 import { Navbar } from "@/components/layout/Navbar";
 import { Accordion } from "@shared/ui/accordion";
 import { Button } from "@shared/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@shared/ui/card";
+import { Card, CardContent } from "@shared/ui/card";
 import {
  faqs,
  features,
@@ -191,23 +189,6 @@ function TypingText({ text, speed = 90 }: { text: string; speed?: number }) {
  transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
  />
  </div>
- );
-}
-
-function AnimatedSection({ children, className = "" }: { children: React.ReactNode; className?: string }) {
- const ref = useRef<HTMLDivElement>(null);
- const isInView = useInView(ref, { once: true, margin: "-80px" });
-
- return (
- <motion.div
- ref={ref}
- initial={{ opacity: 0, y: 36 }}
- animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 36 }}
- transition={{ duration: 0.9, ease: "easeOut" }}
- className={className}
- >
- {children}
- </motion.div>
  );
 }
 
@@ -653,55 +634,76 @@ function ModulesSection() {
  );
 }
 
-function StatsSection() {
- const [visible, setVisible] = useState(false);
- const ref = useRef<HTMLDivElement>(null);
- const isInView = useInView(ref, { once: true, margin: "-100px" });
+function StatCard({
+  stat,
+  index,
+  visible,
+}: {
+  stat: (typeof stats)[number];
+  index: number;
+  visible: boolean;
+}) {
+  const { count, ref: counterRef } = useCounter(
+    parseInt(stat.value.replace(/[^0-9]/g, "")),
+    3000,
+    0,
+  );
 
- useEffect(() => {
- if (isInView) setVisible(true);
- }, [isInView]);
+  const prefix = stat.value.match(/^[^+-]*/)?.[0] ?? "";
+  const suffix = stat.value.replace(/^[^+-]*/, "").replace(/[0-9]/g, "") ?? "";
 
- return (
- <section id="about" className="section-pad bg-foreground text-background dark:bg-white dark:text-slate-950">
- <div className="container grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
- {stats.map((stat, index) => {
- const { count, ref: counterRef } = useCounter(
- parseInt(stat.value.replace(/[^0-9]/g, "")),
- 3000,
- 0,
- );
- const prefix = stat.value.match(/^[^+-]*/)?.[0] ?? "";
- const suffix = stat.value.replace(/^[^+-]*/, "").replace(/[0-9]/g, "") ?? "";
+  return (
+    <motion.div
+      ref={counterRef}
+      initial={{ opacity: 0, y: 24, scale: 0.92 }}
+      animate={visible ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 24, scale: 0.92 }}
+      transition={{ duration: 0.8, delay: index * 0.15, ease: "easeOut" }}
+      className="rounded-lg border border-background/15 bg-background/10 p-7 text-center dark:border-slate-200 dark:bg-slate-50"
+    >
+      <p className="text-4xl font-bold sm:text-5xl">
+        {visible ? `${prefix}${count.toLocaleString()}${suffix}` : "0"}
+      </p>
 
- return (
- <motion.div
- key={stat.label}
- ref={index === 0 ? counterRef : undefined}
- initial={{ opacity: 0, y: 24, scale: 0.92 }}
- animate={visible ? { opacity: 1, y: 0, scale: 1 } : { opacity: 0, y: 24, scale: 0.92 }}
- transition={{ duration: 0.8, delay: index * 0.15, ease: "easeOut" }}
- className="rounded-lg border border-background/15 bg-background/10 p-7 text-center dark:border-slate-200 dark:bg-slate-50"
- >
- <p className="text-4xl font-bold sm:text-5xl">
- {visible ? `${prefix}${count.toLocaleString()}${suffix}` : "0"}
- </p>
- <motion.p
- initial={{ opacity: 0 }}
- animate={visible ? { opacity: 1 } : { opacity: 0 }}
- transition={{ delay: 0.6 + index * 0.12 }}
- className="mt-3 text-sm font-medium opacity-75"
- >
- {stat.label}
- </motion.p>
- </motion.div>
- );
- })}
- </div>
- </section>
- );
+      <motion.p
+        initial={{ opacity: 0 }}
+        animate={visible ? { opacity: 1 } : { opacity: 0 }}
+        transition={{ delay: 0.6 + index * 0.12 }}
+        className="mt-3 text-sm font-medium opacity-75"
+      >
+        {stat.label}
+      </motion.p>
+    </motion.div>
+  );
 }
 
+function StatsSection() {
+  const [visible, setVisible] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const isInView = useInView(ref, { once: true, margin: "-100px" });
+
+  useEffect(() => {
+    if (isInView) setVisible(true);
+  }, [isInView]);
+
+  return (
+    <section
+      ref={ref}
+      id="about"
+      className="section-pad bg-foreground text-background dark:bg-white dark:text-slate-950"
+    >
+      <div className="container grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map((stat, index) => (
+          <StatCard
+            key={stat.label}
+            stat={stat}
+            index={index}
+            visible={visible}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
 function TestimonialsSection() {
  return (
  <section className="section-pad">
@@ -823,7 +825,7 @@ function CtaSection() {
 }
 
 export function HomePage() {
- const [loading, setLoading] = useState(false);
+ const [loading] = useState(false);
 
  return (
  <div className="min-h-screen overflow-x-hidden">

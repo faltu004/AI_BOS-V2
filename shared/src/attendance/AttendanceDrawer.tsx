@@ -1,11 +1,17 @@
 import { motion } from "framer-motion";
-import { Calendar, Camera, CalendarCheck, CheckCircle2, ClipboardCheck, History, LocateFixed, MapPin, X } from "lucide-react";
+import { AlertTriangle, Calendar, Camera, CalendarCheck, CheckCircle2, ClipboardCheck, History, LocateFixed, MapPin, ScanFace, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getStoredAuthSession } from "@shared/auth/auth-service";
 import { formatClockTime } from "@shared/lib/utils-helpers";
 import { Button } from "@shared/ui/button";
 import { Input } from "@shared/ui/input";
 import { Label } from "@shared/ui/label";
+import {
+ captureActiveLivenessVerification,
+ getLivenessInstruction,
+ loadHumanFaceEngine,
+ type FaceVerificationCapture,
+} from "@shared/face-enrollment/human-face-engine";
 import {
  applyForLeave,
  cancelLeaveRequest,
@@ -21,10 +27,14 @@ import {
  checkOutAttendance,
  fetchAttendanceHistory,
  fetchTodayAttendance,
+ issueFaceVerificationChallenge,
+ manualCheckInAttendance,
+ manualCheckOutAttendance,
  type AttendanceLocationPayload,
  type AttendanceMarkPayload,
  type AttendanceRecord,
  type AttendanceToday,
+ type FaceVerificationChallengeResponse,
 } from "./attendance.api";
 
 type AttendanceDrawerProps = {
@@ -35,7 +45,7 @@ type AttendanceDrawerProps = {
 };
 
 type AttendanceAction = "check-in" | "check-out";
-type AttendanceStep = "idle" | "location" | "face" | "done";
+type AttendanceStep = "idle" | "location" | "face" | "manual" | "done";
 
 const leaveApproverRoles = ["HR", "Manager", "Administrator", "Owner"];
 
@@ -140,11 +150,13 @@ export function AttendanceDrawer({
  const [step, setStep] = useState<AttendanceStep>("idle");
  const [message, setMessage] = useState<string | null>(null);
  const [pendingLocation, setPendingLocation] = useState<AttendanceLocationPayload | null>(null);
- const [faceImage, setFaceImage] = useState<string | null>(null);
+ const [challenge, setChallenge] = useState<FaceVerificationChallengeResponse | null>(null);
+ const [verification, setVerification] = useState<FaceVerificationCapture | null>(null);
+ const [manualReason, setManualReason] = useState("");
+ const [livenessRunning, setLivenessRunning] = useState(false);
  const [cameraReady, setCameraReady] = useState(false);
  const [cameraError, setCameraError] = useState<string | null>(null);
  const videoRef = useRef<HTMLVideoElement | null>(null);
- const canvasRef = useRef<HTMLCanvasElement | null>(null);
  const streamRef = useRef<MediaStream | null>(null);
  const displayDate = useMemo(
  () => new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }),
@@ -258,15 +270,10 @@ export function AttendanceDrawer({
  await videoRef.current.play().catch(() => undefined);
  }
  } catch {
- setCameraError("Please allow camera permission to capture face proof.");
+ setCameraError("Camera permission is required for face verification. You can retry or use manual fallback.");
  setCameraReady(false);
  }
  }, []);
-
- useEffect(() => {
- if (step !== "face" || faceImage) return;
- void startCamera();
- }, [faceImage, startCamera, step]);
 
  useEffect(() => {
  if (videoRef.current && streamRef.current) {
@@ -281,7 +288,9 @@ export function AttendanceDrawer({
  setAction(null);
  setStep("idle");
  setPendingLocation(null);
- setFaceImage(null);
+ setChallenge(null);
+ setVerification(null);
+ setManualReason("");
  setMessage(null);
  setCameraError(null);
  setView("today");
@@ -296,12 +305,14 @@ export function AttendanceDrawer({
  setAction(nextAction);
  setStep("location");
  setPendingLocation(null);
- setFaceImage(null);
+ setChallenge(null);
+ setVerification(null);
+ setManualReason("");
  setMessage(nextAction === "check-in" ? "Detecting office location..." : "Verifying office location...");
  try {
  const location = await getLocation();
  setPendingLocation(location);
- setMessage("Location detected. Tap Next to capture face proof.");
+ setMessage("Location detected. Continue to active face verification or use the audited manual fallback.");
  } catch (error) {
  setMessage(error instanceof Error ? error.message : "Location could not be verified.");
  setStep("idle");
@@ -309,52 +320,55 @@ export function AttendanceDrawer({
  }
  };
 
- const continueToFace = () => {
- if (!pendingLocation) return;
+ const continueToFace = async () => {
+ if (!pendingLocation || !action) return;
  setStep("face");
- setMessage("Capture face proof to continue.");
+ setChallenge(null);
+ setVerification(null);
+ setLoading(true);
+ setMessage("Preparing a one-time liveness challenge...");
+ try {
+ await loadHumanFaceEngine();
+ const nextChallenge = await issueFaceVerificationChallenge(action);
+ setChallenge(nextChallenge);
+ setMessage(getLivenessInstruction(nextChallenge.challenge));
+ await startCamera();
+ } catch (error) {
+ setMessage(error instanceof Error ? error.message : "Face verification could not be prepared.");
+ } finally {
+ setLoading(false);
+ }
  };
 
- const captureFace = () => {
+ const runLiveness = async () => {
  const video = videoRef.current;
- const canvas = canvasRef.current;
- if (!video || !canvas) return;
- if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !video.videoWidth || !video.videoHeight) {
+ if (!video || !challenge || !cameraReady) {
  setMessage("Camera is still loading. Please try again in a moment.");
  return;
  }
-
- canvas.width = 320;
- canvas.height = 320;
- const context = canvas.getContext("2d");
- if (!context) return;
- context.fillStyle = "#000";
- context.fillRect(0, 0, canvas.width, canvas.height);
- const sourceWidth = video.videoWidth || 480;
- const sourceHeight = video.videoHeight || 480;
- const scale = Math.min(canvas.width / sourceWidth, canvas.height / sourceHeight);
- const drawWidth = sourceWidth * scale;
- const drawHeight = sourceHeight * scale;
- const drawX = (canvas.width - drawWidth) / 2;
- const drawY = (canvas.height - drawHeight) / 2;
- context.save();
- context.translate(canvas.width, 0);
- context.scale(-1, 1);
- context.drawImage(video, canvas.width - drawX - drawWidth, drawY, drawWidth, drawHeight);
- context.restore();
-    const capturedImage = canvas.toDataURL("image/png");
-    if (!capturedImage.startsWith("data:image/png;base64,") || capturedImage.length > 4_000_000) {
- setMessage("Face photo could not be accepted. Please retake it.");
- return;
- }
- setFaceImage(capturedImage);
+ setLivenessRunning(true);
+ setVerification(null);
+ try {
+ const remaining = Math.max(1_000, new Date(challenge.expiresAt).getTime() - Date.now());
+ const result = await captureActiveLivenessVerification(video, challenge.challenge, remaining, setMessage);
+ setVerification(result);
  stopCamera();
- setMessage("Face captured. Complete attendance to save.");
+ setMessage("Active challenge completed. Submit to perform one-to-one verification and record attendance.");
+ } catch (error) {
+ stopCamera();
+ setChallenge(null);
+ setMessage(error instanceof Error ? error.message : "Liveness verification failed. No attendance was recorded.");
+ } finally {
+ setLivenessRunning(false);
+ }
  };
 
  const submitAttendance = async () => {
- if (!action || !pendingLocation || !faceImage) return;
- const payload: AttendanceMarkPayload = { ...pendingLocation, faceImage };
+ if (!action || !pendingLocation || !challenge || !verification) return;
+ const payload: AttendanceMarkPayload = {
+ ...pendingLocation,
+ verification: { challengeId: challenge.challengeId, ...verification },
+ };
  setLoading(true);
  setMessage(action === "check-in" ? "Saving check-in..." : "Saving check-out...");
  try {
@@ -368,7 +382,34 @@ export function AttendanceDrawer({
  setAction(null);
  } catch (error) {
  setMessage(error instanceof Error ? error.message : "Attendance could not be marked.");
+ setChallenge(null);
+ setVerification(null);
+ stopCamera();
  setStep("face");
+ } finally {
+ setLoading(false);
+ }
+ };
+
+ const submitManualAttendance = async () => {
+ if (!action || !pendingLocation || manualReason.trim().length < 8) {
+ setMessage("Explain why face verification could not be completed.");
+ return;
+ }
+ setLoading(true);
+ setMessage("Recording manual attendance...");
+ try {
+ const payload = { ...pendingLocation, reason: manualReason.trim() };
+ const updated = action === "check-in" ? await manualCheckInAttendance(payload) : await manualCheckOutAttendance(payload);
+ setToday((current) => ({
+ office: current?.office ?? { name: "Office", latitude: 12.9716, longitude: 77.5946, radiusMeters: 300 },
+ record: updated,
+ }));
+ setStep("done");
+ setMessage(`${action === "check-in" ? "Check-in" : "Check-out"} recorded as manual, not face verified.`);
+ setAction(null);
+ } catch (error) {
+ setMessage(error instanceof Error ? error.message : "Manual attendance could not be recorded.");
  } finally {
  setLoading(false);
  }
@@ -379,7 +420,9 @@ export function AttendanceDrawer({
  setAction(null);
  setStep("idle");
  setPendingLocation(null);
- setFaceImage(null);
+ setChallenge(null);
+ setVerification(null);
+ setManualReason("");
  setCameraError(null);
  setMessage(null);
  };
@@ -508,8 +551,8 @@ export function AttendanceDrawer({
  <div className="shrink-0 rounded-lg border bg-card px-3 py-2">
  <div className="grid grid-cols-3 gap-2">
  {[
- { label: "Location", active: step === "location", done: Boolean(pendingLocation) || step === "face" || step === "done" },
- { label: "Face", active: step === "face", done: Boolean(faceImage) || step === "done" },
+ { label: "Location", active: step === "location", done: Boolean(pendingLocation) || step === "face" || step === "manual" || step === "done" },
+ { label: step === "manual" ? "Manual" : "Face", active: step === "face" || step === "manual", done: Boolean(verification) || step === "done" },
  { label: "Done", active: step === "done", done: step === "done" },
  ].map((item, index) => (
  <div className="flex min-w-0 items-center gap-2" key={item.label}>
@@ -557,6 +600,12 @@ export function AttendanceDrawer({
  <div className="rounded-lg border bg-card px-3 py-2 text-sm font-semibold">Check-in: {formatTime(record?.checkInAt)}</div>
  <div className="rounded-lg border bg-card px-3 py-2 text-sm font-semibold">Check-out: {formatTime(record?.checkOutAt)}</div>
  </div>
+ {record?.checkInAt && (
+ <div className="rounded-lg border bg-card px-3 py-2 text-xs text-muted-foreground">
+ Verification: <span className="font-semibold text-foreground">{record.checkInMethod === "manual" ? "Manual, not face verified" : "Face verified"}</span>
+ {record.checkOutAt ? ` / ${record.checkOutMethod === "manual" ? "Manual checkout" : "Face-verified checkout"}` : ""}
+ </div>
+ )}
  <div className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-xs text-muted-foreground">
  <LocateFixed className="h-3.5 w-3.5" />
  {locationText(record)}
@@ -615,6 +664,10 @@ export function AttendanceDrawer({
  <div className="rounded-lg bg-muted px-3 py-2 text-xs font-semibold">Check-in: {formatTime(item.checkInAt)}</div>
  <div className="rounded-lg bg-muted px-3 py-2 text-xs font-semibold">Check-out: {formatTime(item.checkOutAt)}</div>
  </div>
+ <p className="mt-2 text-xs text-muted-foreground">
+ {item.checkInMethod === "manual" ? "Manual check-in, not face verified" : "Face-verified check-in"}
+ {item.checkOutAt ? ` / ${item.checkOutMethod === "manual" ? "manual checkout" : "face-verified checkout"}` : ""}
+ </p>
  </div>
  ))}
  </div>
@@ -877,9 +930,12 @@ export function AttendanceDrawer({
  </div>
  </div>
  {message && <div className="mt-3 rounded-lg border bg-muted px-3 py-2 text-xs font-medium text-foreground">{message}</div>}
- <div className="mt-auto grid shrink-0 gap-2 pt-3 sm:grid-cols-2">
- <Button disabled={!pendingLocation} onClick={continueToFace} type="button">
- Next
+ <div className="mt-auto grid shrink-0 gap-2 pt-3 sm:grid-cols-3">
+ <Button disabled={!pendingLocation || loading} onClick={() => void continueToFace()} type="button">
+ Face verification
+ </Button>
+ <Button disabled={!pendingLocation || loading} onClick={() => { stopCamera(); setStep("manual"); setMessage("Manual attendance is recorded as non-face and audited."); }} type="button" variant="outline">
+ Manual fallback
  </Button>
  <Button onClick={resetFlow} type="button" variant="ghost">
  Cancel
@@ -893,44 +949,78 @@ export function AttendanceDrawer({
  <div className="mt-3 rounded-lg border bg-card p-3">
  <div className="flex items-center justify-between gap-3">
  <div>
- <p className="text-xs font-semibold uppercase text-muted-foreground">Face Proof</p>
- <p className="mt-1 text-sm font-semibold">{faceImage ? "Captured" : "Camera capture"}</p>
+ <p className="text-xs font-semibold uppercase text-muted-foreground">Active liveness</p>
+ <p className="mt-1 text-sm font-semibold">{verification ? "Challenge completed" : challenge ? getLivenessInstruction(challenge.challenge) : "New challenge required"}</p>
  </div>
- <Camera className="h-4 w-4 text-primary" />
+ <ScanFace className="h-4 w-4 text-primary" />
  </div>
+ {!verification && challenge && (
  <div className="mx-auto mt-3 aspect-square w-full max-w-[min(20rem,calc(100vh-17rem))] overflow-hidden rounded-lg border bg-muted">
- {faceImage ? (
- <img alt="Captured face proof" className="h-full w-full object-contain" src={faceImage} />
- ) : (
  <video ref={videoRef} autoPlay className="h-full w-full scale-x-[-1] object-contain" muted playsInline />
- )}
  </div>
- <canvas className="hidden" ref={canvasRef} />
+ )}
+ <p className="mt-3 text-xs leading-5 text-muted-foreground">
+ This is a basic active movement check combined with local anti-spoof and passive liveness scores. It is not continuous monitoring and no camera photo is retained.
+ A timed out challenge records no attendance and must be retried.
+ </p>
  {cameraError && <p className="mt-3 rounded-lg border bg-muted px-3 py-2 text-xs text-destructive">{cameraError}</p>}
  </div>
  {message && <div className="mt-3 rounded-lg border bg-muted px-3 py-2 text-xs font-medium text-foreground">{message}</div>}
- <div className="mt-auto grid shrink-0 gap-2 pt-3 sm:grid-cols-3">
- {!faceImage ? (
- <Button disabled={loading || Boolean(cameraError)} onClick={captureFace} type="button">
- <Camera className="h-4 w-4" />
- Capture Face
+ <div className="mt-auto grid shrink-0 gap-2 pt-3 sm:grid-cols-2">
+ {!challenge ? (
+ <Button disabled={loading || action === null} onClick={() => void continueToFace()} type="button">
+ <Camera className="h-4 w-4" /> New challenge
+ </Button>
+ ) : cameraError ? (
+ <Button disabled={loading || action === null} onClick={() => { setChallenge(null); setCameraError(null); void continueToFace(); }} type="button">
+ <Camera className="h-4 w-4" /> Retry verification
+ </Button>
+ ) : !verification ? (
+ <Button disabled={loading || livenessRunning || !cameraReady || Boolean(cameraError)} onClick={() => void runLiveness()} type="button">
+ <ScanFace className="h-4 w-4" /> {livenessRunning ? "Checking..." : "Start challenge"}
  </Button>
  ) : (
- <Button onClick={() => {
- setFaceImage(null);
- setMessage("Retake face proof.");
- void startCamera();
- }} type="button" variant="outline">
- Retake
+ <Button disabled={loading || action === null} onClick={() => void submitAttendance()} type="button">
+ <CheckCircle2 className="h-4 w-4" />
+ Verify and record
  </Button>
  )}
- <Button disabled={loading || !faceImage || action === null} onClick={() => void submitAttendance()} type="button">
- <CheckCircle2 className="h-4 w-4" />
- Complete
+ <Button onClick={() => { stopCamera(); setStep("manual"); setMessage("Manual attendance is recorded as non-face and audited."); }} type="button" variant="outline">
+ Manual fallback
  </Button>
- <Button onClick={resetFlow} type="button" variant="ghost">
- Cancel
+ <Button onClick={resetFlow} type="button" variant="ghost">Cancel</Button>
+ </div>
+ </div>
+ )}
+
+ {step === "manual" && (
+ <div className="flex min-h-0 flex-1 flex-col">
+ <div className="mt-3 rounded-lg border border-amber-500/40 bg-card p-3">
+ <div className="flex items-start gap-3">
+ <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+ <div>
+ <p className="text-sm font-semibold">Manual attendance fallback</p>
+ <p className="mt-1 text-xs leading-5 text-muted-foreground">
+ This record will be labeled manual, audited, and will not claim that face or liveness verification succeeded.
+ </p>
+ </div>
+ </div>
+ <Label className="mt-4 block" htmlFor="manual-attendance-reason">Reason</Label>
+ <textarea
+ className="mt-1.5 flex min-h-[88px] w-full rounded-lg border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/25"
+ id="manual-attendance-reason"
+ maxLength={240}
+ onChange={(event) => setManualReason(event.target.value)}
+ placeholder="Camera unavailable, accessibility need, or another specific reason"
+ value={manualReason}
+ />
+ </div>
+ {message && <div className="mt-3 rounded-lg border bg-muted px-3 py-2 text-xs font-medium text-foreground">{message}</div>}
+ <div className="mt-auto grid shrink-0 gap-2 pt-3 sm:grid-cols-2">
+ <Button disabled={loading || manualReason.trim().length < 8} onClick={() => void submitManualAttendance()} type="button">
+ Record manual attendance
  </Button>
+ <Button onClick={resetFlow} type="button" variant="ghost">Cancel</Button>
  </div>
  </div>
  )}

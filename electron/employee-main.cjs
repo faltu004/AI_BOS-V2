@@ -35,7 +35,7 @@ function configureMediaPermissions() {
         webContents.getURL();
 
       callback(
-        permission === "media" &&
+        ["media", "geolocation"].includes(permission) &&
           isAppUrl(url) &&
           url.startsWith(trustedOrigin),
       );
@@ -48,7 +48,7 @@ function configureMediaPermissions() {
         webContents?.getURL?.() ?? "";
 
       return (
-        permission === "media" &&
+        ["media", "geolocation"].includes(permission) &&
         isAppUrl(url) &&
         requestingOrigin === trustedOrigin
       );

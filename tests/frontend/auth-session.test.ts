@@ -6,6 +6,16 @@ import type { JwtReadySession } from "../../shared/src/auth/types.ts";
 
 installStorageMocks();
 
+Object.defineProperty(globalThis, "window", {
+  configurable: true,
+  value: {
+    caches: { delete: async () => true },
+    dispatchEvent: () => true,
+    localStorage,
+    sessionStorage,
+  },
+});
+
 function buildSession(email: string, role: JwtReadySession["user"]["role"]): JwtReadySession {
   return {
     accessToken: "access-token",
@@ -48,11 +58,41 @@ test("a remembered session in another tab does not hijack this tab's active sess
   // Tab A: Admin logs in with "remember me" -> written to shared localStorage.
   persistSession(buildSession("admin@example.com", "Administrator"), true);
 
-  // Tab B (same origin/port, e.g. the admin portal): Manager logs in without
+  // Tab B (same origin/port, e.g. the employee portal): Manager logs in without
   // "remember me" -> only writes to this tab's own sessionStorage.
   persistSession(buildSession("manager@example.com", "Manager"), false);
 
   // Tab B must keep seeing its own Manager session, not Admin's from localStorage.
   assert.equal(getStoredAuthSession()?.user.role, "Manager");
   assert.equal(getStoredAuthSession()?.user.email, "manager@example.com");
+});
+
+test("switching from Administrator to Manager clears role-sensitive browser state", () => {
+  clearAuthSession();
+  persistSession(buildSession("admin@example.com", "Administrator"), true);
+  localStorage.setItem("ai-bos-recent-pages", JSON.stringify(["/admin"]));
+  localStorage.setItem("ai-bos-favorite-pages", JSON.stringify(["/monitoring"]));
+  sessionStorage.setItem("admin-completed", "true");
+
+  persistSession(buildSession("manager@example.com", "Manager"), false);
+
+  assert.equal(localStorage.getItem("ai-bos-recent-pages"), null);
+  assert.equal(localStorage.getItem("ai-bos-favorite-pages"), null);
+  assert.equal(sessionStorage.getItem("admin-completed"), null);
+  assert.equal(getStoredAuthSession()?.user.role, "Manager");
+});
+
+test("switching away from Manager clears Manager navigation and dashboard state", () => {
+  clearAuthSession();
+  persistSession(buildSession("manager@example.com", "Manager"), true);
+  localStorage.setItem("ai-bos-recent-pages", JSON.stringify(["/projects", "/analytics"]));
+  localStorage.setItem("ai-bos-favorite-pages", JSON.stringify(["/workflows"]));
+  localStorage.setItem("manager-completed", JSON.stringify(["Review delivery plan"]));
+
+  persistSession(buildSession("employee@example.com", "Employee"), false);
+
+  assert.equal(localStorage.getItem("ai-bos-recent-pages"), null);
+  assert.equal(localStorage.getItem("ai-bos-favorite-pages"), null);
+  assert.equal(localStorage.getItem("manager-completed"), null);
+  assert.equal(getStoredAuthSession()?.user.role, "Employee");
 });

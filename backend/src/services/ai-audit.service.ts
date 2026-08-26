@@ -1,14 +1,26 @@
 import { auditLogService } from "./audit-log.service.js";
 
+export type AIAuditOperation =
+  | "natural_language_query"
+  | "monitoring_summary"
+  | "alert_prioritization"
+  | "alert_explanation"
+  | "device_troubleshooting";
+
 export class AIAuditService {
   async record(input: {
     userId: string;
     role: string;
-    success: boolean;
+    operation: AIAuditOperation;
+    statusCode: number;
     promptLength: number;
     responseLength?: number;
-    scope: string;
-    usedFallback: boolean;
+    sourceCount?: number;
+    durationMs: number;
+    provider: string;
+    blockedAction?: string;
+    ipAddress?: string;
+    userAgent?: string;
   }) {
     return auditLogService
       .record({
@@ -16,15 +28,20 @@ export class AIAuditService {
         actorRole: input.role,
         category: "ai_activity",
         method: "POST",
-        path: "/ai/chat",
+        path: `/ai/${input.operation}`,
         resourceType: "ai",
-        statusCode: input.success ? 200 : 500,
-        success: input.success,
+        statusCode: input.statusCode,
+        success: input.statusCode >= 200 && input.statusCode < 300,
+        ipAddress: input.ipAddress,
+        userAgent: input.userAgent,
         metadata: {
+          operation: input.operation,
           promptLength: input.promptLength,
           responseLength: input.responseLength,
-          scope: input.scope,
-          usedFallback: input.usedFallback,
+          sourceCount: input.sourceCount,
+          durationMs: input.durationMs,
+          provider: input.provider,
+          blockedAction: input.blockedAction,
         },
       })
       .catch(() => null);

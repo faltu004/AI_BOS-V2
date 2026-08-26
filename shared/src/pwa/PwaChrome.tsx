@@ -10,7 +10,10 @@ export function PwaChrome() {
 
  useEffect(() => {
  if (!("caches" in window)) return;
- void window.caches.delete("api-get-cache");
+ void Promise.all([
+ window.caches.delete("api-get-cache"),
+ window.caches.delete("api-get-cache-v2"),
+ ]);
  }, []);
 
  return (

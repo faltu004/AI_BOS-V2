@@ -53,7 +53,6 @@ import {
  saveOrganizationSettings,
 } from "./organization.api";
 import {
- activeStatuses,
  branchTypes,
  businessTypes,
  dateFormats,

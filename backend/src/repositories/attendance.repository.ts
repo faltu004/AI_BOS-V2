@@ -9,22 +9,31 @@ export class AttendanceRepository {
   }
 
   async findByUserAndDate(userId: string, date: string) {
-    return AttendanceModel.findOne({ userId, date }).lean();
+    return AttendanceModel.findOne({ userId, date }).select("-checkInFaceImage -checkOutFaceImage").lean();
   }
 
   async findRecentByUser(userId: string, limit: number) {
-    return AttendanceModel.find({ userId }).sort({ date: -1, checkInAt: -1 }).limit(limit).lean();
+    return AttendanceModel.find({ userId }).select("-checkInFaceImage -checkOutFaceImage").sort({ date: -1, checkInAt: -1 }).limit(limit).lean();
   }
 
   async findByDate(date: string) {
-    return AttendanceModel.find({ date }).sort({ checkInAt: -1 }).lean();
+    return AttendanceModel.find({ date }).select("-checkInFaceImage -checkOutFaceImage").sort({ checkInAt: -1 }).lean();
+  }
+
+  async findAdminOverview(date: string) {
+    return AttendanceModel.find({ date })
+      .select("-checkInFaceImage -checkOutFaceImage")
+      .populate("userId", "fullName email role employeeProfile.employeeCode")
+      .sort({ checkInAt: -1 })
+      .limit(2000)
+      .lean();
   }
 
   async updateByUserAndDate(userId: string, date: string, updates: UpdateQuery<AttendanceDocument>) {
     return AttendanceModel.findOneAndUpdate({ userId, date }, updates, {
       new: true,
       runValidators: true,
-    }).lean();
+    }).select("-checkInFaceImage -checkOutFaceImage").lean();
   }
 }
 

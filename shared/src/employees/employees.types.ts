@@ -59,12 +59,12 @@ export type Employee = {
  education: string[];
  documents: EmployeeDocument[];
  salaryDetails: {
- annualCtc: number;
- monthlySalary: number;
+ annualCtc: number | null;
+ monthlySalary: number | null;
  bank: string;
  taxId: string;
  };
- performanceScore: number;
+ performanceScore?: number;
 };
 
 export type AttendanceRecord = {

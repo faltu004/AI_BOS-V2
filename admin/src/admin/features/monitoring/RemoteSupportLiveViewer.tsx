@@ -1,4 +1,4 @@
-﻿import {
+import {
   useEffect,
   useRef,
   useState,
@@ -817,7 +817,7 @@ export function RemoteSupportLiveViewer({
     });
   }
 
-  function handleKey(
+  function _handleKey(
     event:
       React.KeyboardEvent<HTMLDivElement>,
     action:

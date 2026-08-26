@@ -45,15 +45,13 @@ import {
  fetchAttendanceSummary,
  fetchDepartments,
  fetchEmployees,
+ fetchHolidays,
  type DepartmentOption,
 } from "./employees.api";
 import { DepartmentGroupPanel } from "./DepartmentGroupPanel";
-import {
- holidays,
- seedLeaveRequests,
-} from "./employees.data";
+import { decideLeaveRequest, fetchLeaveApprovals, type LeaveRequestRecord } from "@shared/leave/leave.api";
 import { employeeFormSchema, type EmployeeFormValues } from "./employees.schema";
-import type { AttendanceRecord, Employee, EmployeeFormInput, EmployeeModule, LeaveRequest } from "./employees.types";
+import type { AttendanceRecord, Employee, EmployeeFormInput, EmployeeModule, Holiday } from "./employees.types";
 import { formatMoney, getEmployeeDashboardStats } from "./employees.utils";
 
 const modules: { id: EmployeeModule; label: string; icon: typeof UsersRound }[] = [
@@ -302,15 +300,20 @@ function DetailList({ icon: Icon, items, title }: { icon: typeof BadgeCheck; ite
 
 type EmployeesPageProps = {
  attendanceMode?: "manage" | "view";
+ canCreateDepartments?: boolean;
 };
 
-export function EmployeesPage({ attendanceMode = "manage" }: EmployeesPageProps = {}) {
+export function EmployeesPage({ attendanceMode = "manage", canCreateDepartments = true }: EmployeesPageProps = {}) {
  const [employees, setEmployees] = useState<Employee[]>([]);
  const [departmentOptions, setDepartmentOptions] = useState<DepartmentOption[]>([]);
+ const [holidays, setHolidays] = useState<Holiday[]>([]);
+ const [holidaysState, setHolidaysState] = useState<"ok" | "forbidden" | "error">("ok");
  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
  const [loadingAttendance, setLoadingAttendance] = useState(false);
  const [attendanceAccess, setAttendanceAccess] = useState<"ok" | "forbidden" | "error">("ok");
- const [leaveRequests, setLeaveRequests] = useState(seedLeaveRequests);
+ const [leaveRequests, setLeaveRequests] = useState<LeaveRequestRecord[]>([]);
+ const [leaveLoading, setLeaveLoading] = useState(false);
+ const [leaveError, setLeaveError] = useState<string | null>(null);
  const [activeModule, setActiveModule] = useState<EmployeeModule>("employees");
  const [search, setSearch] = useState("");
  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>();
@@ -323,19 +326,15 @@ export function EmployeesPage({ attendanceMode = "manage" }: EmployeesPageProps 
  const loadSequenceRef = useRef(0);
  const attendanceLoadSequenceRef = useRef(0);
  const { toast } = useToast();
- const [leaveForm, setLeaveForm] = useState({
- employeeId: "",
- type: "Paid Leave",
- from: new Date().toISOString().slice(0, 10),
- to: new Date().toISOString().slice(0, 10),
- reason: "",
- });
-
  const loadEmployees = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
  const requestId = loadSequenceRef.current + 1;
  loadSequenceRef.current = requestId;
  if (!silent) setLoadingEmployees(true);
- const [employeeResult, departmentResult] = await Promise.all([fetchEmployees(), fetchDepartments()]);
+ const [employeeResult, departmentResult, holidayResult] = await Promise.all([
+ fetchEmployees(),
+ fetchDepartments(),
+ fetchHolidays(),
+ ]);
 
  if (requestId !== loadSequenceRef.current) return;
 
@@ -350,9 +349,15 @@ export function EmployeesPage({ attendanceMode = "manage" }: EmployeesPageProps 
  .map((name) => ({ id: name, name, memberCount: 0 })),
  ];
  setDepartmentOptions(mergedDepartments);
+ if (holidayResult.status === "ok") {
+ setHolidays(holidayResult.data);
+ setHolidaysState("ok");
+ } else {
+ setHolidays([]);
+ setHolidaysState(holidayResult.status);
+ }
  setEmployeesAccess("ok");
  setSelectedEmployeeId((current) => current ?? employeeResult.data[0]?.id);
- setLeaveForm((current) => ({ ...current, employeeId: current.employeeId || employeeResult.data[0]?.id || "" }));
  } else {
  setEmployees([]);
  setDepartmentOptions([]);
@@ -428,6 +433,31 @@ export function EmployeesPage({ attendanceMode = "manage" }: EmployeesPageProps 
  };
  }, [activeModule, loadAttendance]);
 
+ const loadLeaveApprovals = useCallback(async () => {
+ setLeaveLoading(true);
+ try {
+ setLeaveRequests(await fetchLeaveApprovals(undefined, 100));
+ setLeaveError(null);
+ } catch (error) {
+ setLeaveRequests([]);
+ setLeaveError(error instanceof Error ? error.message : "Leave approvals could not be loaded.");
+ } finally {
+ setLeaveLoading(false);
+ }
+ }, []);
+
+ useEffect(() => {
+ if (activeModule !== "leave") return;
+ const refresh = () => void loadLeaveApprovals();
+ refresh();
+ window.addEventListener(sharedDataChangedEvent, refresh);
+ window.addEventListener("focus", refresh);
+ return () => {
+ window.removeEventListener(sharedDataChangedEvent, refresh);
+ window.removeEventListener("focus", refresh);
+ };
+ }, [activeModule, loadLeaveApprovals]);
+
  const selectedEmployee = employees.find((employee) => employee.id === selectedEmployeeId) ?? employees[0];
  const filteredEmployees = useMemo(
  () =>
@@ -447,7 +477,6 @@ export function EmployeesPage({ attendanceMode = "manage" }: EmployeesPageProps 
  const employee = await createEmployee(input, departmentId);
  setEmployees((current) => [employee, ...current]);
  setSelectedEmployeeId(employee.id);
- setLeaveForm((current) => ({ ...current, employeeId: current.employeeId || employee.id }));
  setIsAddingEmployee(false);
  toast({ title: "Employee added", description: `${input.name} can now sign in as ${input.role}.`, type: "success" });
  } catch (error) {
@@ -457,20 +486,14 @@ export function EmployeesPage({ attendanceMode = "manage" }: EmployeesPageProps 
  }
  };
 
- const submitLeave = () => {
- if (!leaveForm.employeeId) return;
- const request: LeaveRequest = {
- ...leaveForm,
- id: `leave-${Date.now()}`,
- status: "Pending",
- approver: "Naina Rao",
- };
- setLeaveRequests((current) => [request, ...current]);
- setLeaveForm((current) => ({ ...current, reason: "" }));
- };
-
- const updateLeaveStatus = (id: string, status: LeaveRequest["status"]) => {
- setLeaveRequests((current) => current.map((request) => (request.id === id ? { ...request, status } : request)));
+ const updateLeaveStatus = async (id: string, status: "Approved" | "Rejected") => {
+ try {
+ await decideLeaveRequest(id, status);
+ await loadLeaveApprovals();
+ toast({ title: `Leave ${status.toLowerCase()}`, description: "The backend approval record was updated.", type: "success" });
+ } catch (error) {
+ toast({ title: "Could not update leave", description: (error as Error).message, type: "error" });
+ }
  };
 
  const addDepartment = async (input: { name: string; description?: string; headId: string }) => {
@@ -515,7 +538,7 @@ export function EmployeesPage({ attendanceMode = "manage" }: EmployeesPageProps 
  <Link to="/dashboard">Dashboard</Link>
  </Button>
  <ThemeToggle />
- {activeModule === "departments" && (
+ {activeModule === "departments" && canCreateDepartments && (
  <Button onClick={() => setIsAddingDepartment(true)} type="button" variant="outline">
  <Plus className="h-4 w-4" />
  New Department
@@ -620,7 +643,7 @@ export function EmployeesPage({ attendanceMode = "manage" }: EmployeesPageProps 
  {activeModule === "departments" && (
  departmentOptions.length === 0 ? (
  <EmptyState
- action={{ label: "New Department", onClick: () => setIsAddingDepartment(true) }}
+ action={canCreateDepartments ? { label: "New Department", onClick: () => setIsAddingDepartment(true) } : undefined}
  description="Create your first department and pick its head to get started."
  icon={UsersRound}
  title="No departments yet"
@@ -658,11 +681,9 @@ export function EmployeesPage({ attendanceMode = "manage" }: EmployeesPageProps 
  )}
  {activeModule === "leave" && (
  <LeavePanel
- employees={employees}
- form={leaveForm}
+ error={leaveError}
  leaveRequests={leaveRequests}
- onFormChange={setLeaveForm}
- onSubmit={submitLeave}
+ loading={leaveLoading}
  onUpdate={updateLeaveStatus}
  />
  )}
@@ -670,10 +691,23 @@ export function EmployeesPage({ attendanceMode = "manage" }: EmployeesPageProps 
  <SimpleGrid title="Salary" rows={employees.map((employee) => [employee.name, employee.department, formatMoney(employee.salaryDetails.monthlySalary), formatMoney(employee.salaryDetails.annualCtc)])} />
  )}
  {activeModule === "holidays" && (
- <SimpleGrid title="Holidays" rows={holidays.map((holiday) => [holiday.name, holiday.date, holiday.type, "Company calendar"])} />
+ holidaysState === "ok" ? (
+ <SimpleGrid emptyMessage="No holidays are configured in the backend." title="Holidays" rows={holidays.map((holiday) => [holiday.name, holiday.date, holiday.type, "Company calendar"])} />
+ ) : (
+ <EmptyState
+ description={holidaysState === "forbidden" ? "Your account is not authorized to view the company holiday calendar." : "The company holiday calendar could not be loaded from the backend."}
+ icon={CalendarDays}
+ title="Holidays unavailable"
+ />
+ )
  )}
  {activeModule === "performance" && (
- <SimpleGrid title="Performance" rows={employees.map((employee) => [employee.name, employee.designation, `${employee.performanceScore}%`, employee.performanceScore >= 90 ? "Excellent" : "Strong"])} />
+ <SimpleGrid title="Performance" rows={employees.map((employee) => [
+ employee.name,
+ employee.designation,
+ employee.performanceScore === undefined ? "Not recorded" : `${employee.performanceScore}%`,
+ employee.performanceScore === undefined ? "No backend score" : employee.performanceScore >= 90 ? "Excellent" : "Strong",
+ ])} />
  )}
  {activeModule === "documents" && (
  <SimpleGrid
@@ -704,7 +738,7 @@ export function EmployeesPage({ attendanceMode = "manage" }: EmployeesPageProps 
  />
  )}
 
- {isAddingDepartment && (
+ {canCreateDepartments && isAddingDepartment && (
  <DepartmentFormModal
  employees={employees}
  onClose={() => setIsAddingDepartment(false)}
@@ -862,53 +896,37 @@ function AttendancePanel({
 }
 
 function LeavePanel({
- employees,
- form,
+ error,
  leaveRequests,
- onFormChange,
- onSubmit,
+ loading,
  onUpdate,
 }: {
- employees: Employee[];
- form: { employeeId: string; type: string; from: string; to: string; reason: string };
- leaveRequests: LeaveRequest[];
- onFormChange: (value: { employeeId: string; type: string; from: string; to: string; reason: string }) => void;
- onSubmit: () => void;
- onUpdate: (id: string, status: LeaveRequest["status"]) => void;
+ error: string | null;
+ leaveRequests: LeaveRequestRecord[];
+ loading: boolean;
+ onUpdate: (id: string, status: "Approved" | "Rejected") => Promise<void>;
 }) {
- const employeeName = (id: string) => employees.find((employee) => employee.id === id)?.name ?? "Employee";
+ const recordId = (request: LeaveRequestRecord) => request.id ?? request._id ?? "";
+ const employeeName = (request: LeaveRequestRecord) =>
+ typeof request.userId === "string" ? "Employee" : request.userId.fullName ?? request.userId.email ?? "Employee";
 
  return (
  <Card className="glass">
  <CardHeader>
- <CardTitle>Leave</CardTitle>
+ <CardTitle>Leave Approvals</CardTitle>
+ <p className="text-xs text-muted-foreground">Live requests assigned to you by the backend.</p>
  </CardHeader>
  <CardContent className="space-y-4">
- <div className="grid gap-3 rounded-lg border bg-background p-4 md:grid-cols-2">
- <select className="h-11 rounded-md border bg-background px-3 text-sm" value={form.employeeId} onChange={(event) => onFormChange({ ...form, employeeId: event.target.value })}>
- {employees.map((employee) => (
- <option key={employee.id} value={employee.id}>
- {employee.name}
- </option>
- ))}
- </select>
- <select className="h-11 rounded-md border bg-background px-3 text-sm" value={form.type} onChange={(event) => onFormChange({ ...form, type: event.target.value })}>
- {["Paid Leave", "Sick Leave", "Casual Leave", "Work From Home"].map((item) => (
- <option key={item}>{item}</option>
- ))}
- </select>
- <Input type="date" value={form.from} onChange={(event) => onFormChange({ ...form, from: event.target.value })} />
- <Input type="date" value={form.to} onChange={(event) => onFormChange({ ...form, to: event.target.value })} />
- <Input className="md:col-span-2" placeholder="Reason" value={form.reason} onChange={(event) => onFormChange({ ...form, reason: event.target.value })} />
- <Button className="md:col-span-2" onClick={onSubmit} type="button">
- Apply Leave
- </Button>
- </div>
+ {loading && <p className="text-sm text-muted-foreground">Loading leave approvals...</p>}
+ {!loading && error && <p className="text-sm text-destructive">{error}</p>}
+ {!loading && !error && leaveRequests.length === 0 && (
+ <p className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">No leave requests are awaiting or assigned to you.</p>
+ )}
  {leaveRequests.map((request) => (
- <div className="rounded-lg border bg-background p-4" key={request.id}>
+ <div className="rounded-lg border bg-background p-4" key={recordId(request)}>
  <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
  <div>
- <p className="font-semibold">{employeeName(request.employeeId)}</p>
+ <p className="font-semibold">{employeeName(request)}</p>
  <p className="mt-1 text-sm text-muted-foreground">
  {request.type} - {request.from} to {request.to}
  </p>
@@ -918,10 +936,10 @@ function LeavePanel({
  </div>
  {request.status === "Pending" && (
  <div className="mt-3 flex gap-2">
- <Button onClick={() => onUpdate(request.id, "Approved")} size="sm" type="button">
+ <Button onClick={() => void onUpdate(recordId(request), "Approved")} size="sm" type="button">
  Approve
  </Button>
- <Button onClick={() => onUpdate(request.id, "Rejected")} size="sm" type="button" variant="outline">
+ <Button onClick={() => void onUpdate(recordId(request), "Rejected")} size="sm" type="button" variant="outline">
  Reject
  </Button>
  </div>

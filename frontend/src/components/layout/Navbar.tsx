@@ -84,7 +84,7 @@ export function Navbar() {
  const [isOpen, setIsOpen] = useState(false);
  const [navigating, setNavigating] = useState(false);
 
- const handleNavigate = useCallback((label: string) => {
+ const handleNavigate = useCallback((_label: string) => {
  setNavigating(true);
  setTimeout(() => {
  setNavigating(false);

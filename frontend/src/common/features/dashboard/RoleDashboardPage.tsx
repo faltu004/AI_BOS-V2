@@ -18,7 +18,9 @@ import type { AuthRole, JwtReadySession } from "@shared/auth/types";
 import {
  fetchLeadStats,
  fetchOrgCounts,
+ fetchProjectStats,
  fetchRecentTasks,
+ fetchWorkflowStats,
 } from "@shared/dashboard-stats/dashboard-stats.api";
 import { fetchTeamAccounts } from "@shared/team-accounts/team-accounts.api";
 import { fetchTaskStats } from "@shared/tasks/tasks.api";
@@ -28,7 +30,6 @@ import {
  type ProfessionalDashboardConfig,
 } from "@shared/platform/ProfessionalDashboard";
 import { liveSyncIntervalMs, sharedDataChangedEvent } from "@shared/realtime/data-sync";
-import { DashboardPage as FullAccessDashboard } from "./DashboardPage";
 import { Button } from "@shared/ui/button";
 import { Card, CardContent } from "@shared/ui/card";
 
@@ -55,9 +56,57 @@ const supportNav = [
  },
 ];
 
-type FrontlineDashboardRole = "Employee" | "HR" | "Finance" | "Sales" | "Support" | "Developer" | "Guest";
+type FrontlineDashboardRole = "Manager" | "Employee" | "HR" | "Finance" | "Sales" | "Support" | "Developer" | "Guest";
 
 const roleDashboards: Record<FrontlineDashboardRole, ProfessionalDashboardConfig> = {
+ Manager: {
+ storageKey: "manager",
+ eyebrow: "Manager Workspace",
+ title: "Manager Dashboard",
+ subtitle: "Live delivery, team, workflow, and business performance from the AI BOS backend.",
+ roleLabel: "Manager",
+ navGroups: [
+ {
+ label: "Workspace",
+ items: [
+ { label: "Dashboard", href: "/dashboard", icon: BriefcaseBusiness },
+ { label: "Projects", href: "/projects", icon: BriefcaseBusiness },
+ { label: "Workflows", href: "/workflows", icon: CheckCircle2 },
+ { label: "Tasks", href: "/tasks", icon: CheckSquare },
+ { label: "Meetings", href: "/meetings", icon: CalendarDays },
+ { label: "Messenger", href: "/messenger", icon: FileText },
+ ],
+ },
+ {
+ label: "Team",
+ items: [{ label: "Employees", href: "/employees", icon: UsersRound }],
+ },
+ {
+ label: "Account",
+ items: [
+ { label: "Analytics", href: "/analytics", icon: WalletCards },
+ { label: "Notifications", href: "/notifications", icon: CheckCircle2 },
+ { label: "Profile", href: "/profile", icon: UserRound },
+ ],
+ },
+ ],
+ stats: [
+ { label: "Active Projects", value: "-", trend: "Loading...", icon: BriefcaseBusiness, href: "/projects" },
+ { label: "Open Tasks", value: "-", trend: "Loading...", icon: CheckSquare, href: "/tasks" },
+ { label: "Team Members", value: "-", trend: "Loading...", icon: UsersRound, href: "/employees" },
+ { label: "Workflow Runs", value: "-", trend: "Loading...", icon: CheckCircle2, href: "/workflows" },
+ ],
+ primaryActions: [
+ { label: "Projects", href: "/projects", icon: BriefcaseBusiness, note: "Milestones, budgets, timelines, and project details" },
+ { label: "Tasks", href: "/tasks", icon: CheckSquare, note: "Assignments, priorities, checklists, and delivery" },
+ { label: "Employees", href: "/employees", icon: UsersRound, note: "Live employee records and team operations" },
+ { label: "Analytics", href: "/analytics", icon: WalletCards, note: "Delivery performance, workload, and risk trends" },
+ ],
+ queue: [],
+ activity: [],
+ insights: [],
+ focus: ["Projects and tasks", "Team delivery", "Workflow operations", "Business analytics"],
+ },
  Employee: {
  storageKey: "employee",
  eyebrow: "Employee Workspace",
@@ -218,7 +267,7 @@ const roleDashboards: Record<FrontlineDashboardRole, ProfessionalDashboardConfig
 };
 
 function isFrontlineRole(role?: AuthRole): role is FrontlineDashboardRole {
- return role === "Employee" || role === "HR" || role === "Finance" || role === "Sales" || role === "Support" || role === "Developer" || role === "Guest";
+ return role === "Manager" || role === "Employee" || role === "HR" || role === "Finance" || role === "Sales" || role === "Support" || role === "Developer" || role === "Guest";
 }
 
 function SetupStatus({ complete }: { complete: boolean }) {
@@ -286,9 +335,11 @@ function OnboardingSetupCard({ session }: { session: JwtReadySession | null }) {
  </Link>
  </Button>
  ) : (
- <Button disabled type="button" variant="outline">
+ <Button asChild type="button" variant="outline">
+ <Link to="/face-enrollment">
  <ShieldCheck className="h-4 w-4" />
- Set Up Face
+ Manage Face
+ </Link>
  </Button>
  )}
  </div>
@@ -331,6 +382,30 @@ export function RoleDashboardPage() {
  icon: CheckCircle2,
  }),
  );
+ }
+
+ if (role === "Manager") {
+ const [projectStats, accountsResult, workflowStats] = await Promise.all([
+ fetchProjectStats(),
+ fetchTeamAccounts(),
+ fetchWorkflowStats(),
+ ]);
+ if (requestId !== loadSequenceRef.current) return;
+ if (projectStats.status === "ok") {
+ next["Active Projects"] = {
+ value: String(projectStats.data.active),
+ trend: `${projectStats.data.delayed} delayed`,
+ };
+ }
+ if (accountsResult.status === "ok") {
+ next["Team Members"] = { value: String(accountsResult.data.length), trend: "Live count" };
+ }
+ if (workflowStats.status === "ok") {
+ next["Workflow Runs"] = {
+ value: String(workflowStats.data.totalExecutions),
+ trend: `${workflowStats.data.active} active`,
+ };
+ }
  }
 
  if (role === "HR") {
@@ -393,7 +468,7 @@ export function RoleDashboardPage() {
  }, []);
 
  if (!isFrontlineRole(role)) {
- return <FullAccessDashboard />;
+ return null;
  }
 
  const config = roleDashboards[role];

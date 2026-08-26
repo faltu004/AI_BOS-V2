@@ -21,6 +21,25 @@ function registerAppSchemePrivileges(protocol) {
   ]);
 }
 
+/*
+ * Hostnames that only ever appear as documentation examples/placeholders
+ * (never a real deployment target). A config file containing one of
+ * these is treated exactly like an unresolved REPLACE_WITH_ placeholder
+ * and rejected, instead of being accepted as if it were a real,
+ * intentionally configured host. This exists because a config file
+ * with the literal example hostname "SERVER" was previously created by
+ * hand on a production machine (copied from this file's own error
+ * message text) and silently passed validation, since it was a
+ * well-formed http(s)://.../api/v1 URL.
+ */
+const KNOWN_PLACEHOLDER_HOSTNAMES = new Set([
+  "server",
+  "example.com",
+  "yourserver",
+  "your-server",
+  "hostname",
+]);
+
 function normalizeApiBaseUrl(value) {
   const trimmed =
     typeof value === "string"
@@ -54,6 +73,14 @@ function normalizeApiBaseUrl(value) {
     parsed.password ||
     parsed.search ||
     parsed.hash
+  ) {
+    return undefined;
+  }
+
+  if (
+    KNOWN_PLACEHOLDER_HOSTNAMES.has(
+      parsed.hostname.toLowerCase(),
+    )
   ) {
     return undefined;
   }
@@ -151,8 +178,9 @@ function readRuntimeConfig({
     [
       "No valid AI BOS desktop API configuration was found.",
       `Create or configure: ${programDataHint}`,
-      "Required example:",
-      '{"API_BASE_URL":"http://SERVER:5000/api/v1"}',
+      "It must contain the REAL production API hostname for this deployment, for example:",
+      '{"API_BASE_URL":"https://ADMIN-WORKNAI:5443/api/v1"}',
+      "Do not copy that example hostname literally; use this deployment's actual Main/Golden PC hostname.",
       issues.length
         ? `Rejected configuration files: ${issues.join(" | ")}`
         : "No configuration candidate file exists."

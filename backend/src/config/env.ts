@@ -3,6 +3,12 @@ import { z } from "zod";
 
 dotenv.config();
 
+const optionalEnvString = (schema: z.ZodString) =>
+  z.preprocess(
+    (value) => typeof value === "string" && value.trim() === "" ? undefined : value,
+    schema.optional(),
+  );
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(5000),
@@ -23,15 +29,20 @@ const envSchema = z.object({
   JWT_ISSUER: z.string().default("ai-bos-api"),
   JWT_AUDIENCE: z.string().default("ai-bos-clients"),
   ENCRYPTION_SECRET: z.string().min(16).optional(),
+  BIOMETRIC_ENCRYPTION_SECRET: z.string().min(32).optional(),
   JWT_ACCESS_EXPIRES_IN: z.string().default("15m"),
   JWT_REFRESH_EXPIRES_IN: z.string().default("7d"),
   BCRYPT_SALT_ROUNDS: z.coerce.number().int().min(8).max(14).default(12),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(900000),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(1200),
   UPLOAD_MAX_FILE_SIZE_MB: z.coerce.number().int().positive().default(10),
-  OLLAMA_BASE_URL: z.string().url().default("http://127.0.0.1:11434"),
-  OLLAMA_MODEL: z.string().default("llama3.2:3b"),
-  AI_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
+  AI_PROVIDER: z.enum(["disabled", "ollama", "openai-compatible"]).default("disabled"),
+  AI_PROVIDER_BASE_URL: optionalEnvString(z.string().url()),
+  AI_PROVIDER_MODEL: optionalEnvString(z.string().trim().min(1).max(120)),
+  AI_PROVIDER_API_KEY: optionalEnvString(z.string().min(8)),
+  AI_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).max(300000).default(30000),
+  AI_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(100).default(20),
+  AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(128).max(4096).default(1200),
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().int().positive().default(587),
   SMTP_USER: z.string().optional(),

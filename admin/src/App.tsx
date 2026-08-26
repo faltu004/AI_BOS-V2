@@ -24,16 +24,18 @@ const SettingsPage = lazyNamed(() => import("@/admin/features/settings"), "Setti
 const IntegrationsCenterPage = lazyNamed(() => import("@/admin/features/integrations"), "IntegrationsCenterPage");
 const AuditBackupPage = lazyNamed(() => import("@/admin/features/audit-backup"), "AuditBackupPage");
 const SecurityDashboardPage = lazyNamed(() => import("@/admin/features/security"), "SecurityDashboardPage");
+const AIPage = lazyNamed(() => import("@/admin/features/ai"), "AIPage");
+const AttendancePage = lazyNamed(() => import("@/admin/features/attendance"), "AttendancePage");
 const MonitoringDashboardPage = lazyNamed(() => import("@/admin/features/monitoring"), "MonitoringDashboardPage");
 const DeviceDetailsPage = lazyNamed(() => import("@/admin/features/monitoring"), "DeviceDetailsPage");
 const SoftwareCatalogPage = lazyNamed(() => import("@/admin/features/monitoring"), "SoftwareCatalogPage");
 const AnalyticsPage = lazyNamed(() => import("@/common/features/analytics"), "AnalyticsPage");
-const ProjectsPage = lazyNamed(() => import("@/manager/features/projects"), "ProjectsPage");
-const ProjectDetailsPage = lazyNamed(() => import("@/manager/features/projects"), "ProjectDetailsPage");
-const WorkflowsPage = lazyNamed(() => import("@/manager/features/workflows"), "WorkflowsPage");
-const TasksPage = lazyNamed(() => import("@/manager/features/tasks"), "TasksPage");
-const MeetingsPage = lazyNamed(() => import("@/manager/features/meetings"), "MeetingsPage");
-const EmployeesPage = lazyNamed(() => import("@/manager/features/employees"), "EmployeesPage");
+const ProjectsPage = lazyNamed(() => import("@shared/projects"), "ProjectsPage");
+const ProjectDetailsPage = lazyNamed(() => import("@shared/projects"), "ProjectDetailsPage");
+const WorkflowsPage = lazyNamed(() => import("@shared/workflows"), "WorkflowsPage");
+const TasksPage = lazyNamed(() => import("@shared/tasks"), "TasksPage");
+const MeetingsPage = lazyNamed(() => import("@shared/meetings"), "MeetingsPage");
+const EmployeesPage = lazyNamed(() => import("@shared/employees"), "EmployeesPage");
 const ProfilePage = lazyNamed(() => import("@shared/profile/RoleProfilePage"), "RoleProfilePage");
 const CompleteProfilePage = lazyNamed(() => import("@shared/profile/CompleteProfilePage"), "CompleteProfilePage");
 const ChangePasswordRequiredPage = lazyNamed(() => import("@shared/auth/pages/ChangePasswordRequiredPage"), "ChangePasswordRequiredPage");
@@ -69,11 +71,13 @@ const routes: AppRouteConfig[] = [
   { path: "/tasks", element: <TasksPage />, allowedRoles: adminRoles },
   { path: "/meetings", element: <MeetingsPage />, allowedRoles: adminRoles },
   { path: "/employees", element: <EmployeesPage />, allowedRoles: adminRoles },
+  { path: "/attendance", element: <AttendancePage />, allowedRoles: adminRoles },
   { path: "/messenger", element: <CollaborationHubPage />, allowedRoles: adminRoles },
   { path: "/collaboration", element: <CollaborationHubPage />, allowedRoles: adminRoles },
   { path: "/notifications", element: <NotificationCenterPage />, allowedRoles: adminRoles },
   { path: "/audit-backup", element: <AuditBackupPage />, allowedRoles: adminRoles },
   { path: "/security", element: <SecurityDashboardPage />, allowedRoles: adminRoles },
+  { path: "/ai-assistant", element: <AIPage />, allowedRoles: adminRoles },
   { path: "/monitoring", element: <MonitoringAccessGate><MonitoringDashboardPage /></MonitoringAccessGate>, allowedRoles: adminRoles },
   { path: "/monitoring/devices/:deviceId", element: <MonitoringAccessGate><DeviceDetailsPage /></MonitoringAccessGate>, allowedRoles: adminRoles },
   { path: "/monitoring/software-catalog", element: <MonitoringAccessGate><SoftwareCatalogPage /></MonitoringAccessGate>, allowedRoles: adminRoles },

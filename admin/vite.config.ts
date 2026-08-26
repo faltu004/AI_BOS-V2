@@ -13,13 +13,14 @@ export default defineConfig({
       filename: "sw.ts",
       injectManifest: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
       },
       registerType: "prompt",
       includeAssets: ["icons/apple-touch-icon.png"],
       manifest: {
         name: "AI BOS Admin Console",
         short_name: "AI BOS Admin",
-        description: "AI BOS Admin Console for platform administrators and managers.",
+        description: "AI BOS Admin Console for owners and platform administrators.",
         theme_color: "#2a6df4",
         background_color: "#f7f9fc",
         display: "standalone",

@@ -1,15 +1,13 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowRightLeft, Search, UsersRound } from "lucide-react";
 import { Avatar } from "@shared/ui/avatar";
 import { Button } from "@shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@shared/ui/card";
 import { Input } from "@shared/ui/input";
 import { useToast } from "@shared/ui/toast-context";
-import { updateEmployeeDepartment, updateEmployeeRole } from "./employees.api";
+import { fetchAssignableRoles, updateEmployeeDepartment, updateEmployeeRole } from "./employees.api";
 import type { AuthRole } from "@shared/auth/types";
 import type { Department, Employee } from "./employees.types";
-
-const assignableRoleOptions: AuthRole[] = ["Manager", "HR", "Finance", "Sales", "Support", "Developer", "Employee"];
 
 type DepartmentGroupPanelProps = {
  department: Department;
@@ -24,7 +22,14 @@ export function DepartmentGroupPanel({ department, members, otherDepartments, no
  const [busyId, setBusyId] = useState<string | null>(null);
  const [movePickerId, setMovePickerId] = useState<string | null>(null);
  const [rolePickerId, setRolePickerId] = useState<string | null>(null);
+ const [assignableRoleOptions, setAssignableRoleOptions] = useState<AuthRole[]>([]);
  const { toast } = useToast();
+
+ useEffect(() => {
+ fetchAssignableRoles().then((result) => {
+ if (result.status === "ok") setAssignableRoleOptions(result.data);
+ });
+ }, []);
 
  const filteredNonMembers = useMemo(
  () =>
@@ -133,13 +138,13 @@ export function DepartmentGroupPanel({ department, members, otherDepartments, no
  <p className="truncate text-xs text-muted-foreground" title={employee.designation}>{employee.designation}</p>
  </div>
  <div className="ml-auto flex shrink-0 items-center gap-1.5">
- <button
+ {assignableRoleOptions.length > 0 ? <button
  className="shrink-0 whitespace-nowrap rounded-full bg-primary/10 px-2 py-1 text-[11px] font-semibold text-primary hover:bg-primary/20"
  onClick={() => setRolePickerId((current) => (current === employee.id ? null : employee.id))}
  type="button"
  >
  {employee.role}
- </button>
+ </button> : <span className="shrink-0 whitespace-nowrap rounded-full bg-primary/10 px-2 py-1 text-[11px] font-semibold text-primary">{employee.role}</span>}
  <Button
  className="h-7 w-7"
  disabled={busyId === employee.id}

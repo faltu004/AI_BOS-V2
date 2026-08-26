@@ -9,7 +9,6 @@ import {
  MessageSquare,
  Package,
  Plug,
- ReceiptText,
  Settings,
  UserPlus,
  UsersRound,

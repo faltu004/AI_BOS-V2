@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { authSessionChangedEvent } from "@shared/auth/auth-service";
 import { Button } from "@shared/ui/button";
 import { useToast } from "@shared/ui/toast-context";
 import { quickActionsOpenEvent } from "./events";
@@ -48,7 +49,7 @@ const routeLabels: Record<string, string> = {
 const onboardingSteps = [
  {
  title: "One Command Center",
- description: "Use the dashboard to monitor revenue, projects, people, customers, documents, and upcoming deadlines in one place.",
+ description: "Use the dashboard to monitor projects, tasks, people, workflows, and upcoming deadlines in one place.",
  },
  {
  title: "Search Everything",
@@ -56,7 +57,7 @@ const onboardingSteps = [
  },
  {
  title: "Quick Create",
- description: "Press Alt N or use the floating create button to start projects, tasks, employees, meetings, invoices, and documents instantly.",
+ description: "Press Alt N or use the floating create button to start the actions available to your signed-in role.",
  },
  {
  title: "Personal Workspace",
@@ -115,6 +116,10 @@ function isAppRoute(pathname: string) {
  && !pathname.startsWith("/verify-email");
 }
 
+function isVisibleWorkspacePath(pathname: string, items: readonly WorkspaceSearchItem[]) {
+ return items.some((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
+}
+
 function OnboardingTour({ open, onClose }: { open: boolean; onClose: () => void }) {
  const [step, setStep] = useState(0);
  const current = onboardingSteps[step];
@@ -144,7 +149,7 @@ function OnboardingTour({ open, onClose }: { open: boolean; onClose: () => void 
  <X className="h-4 w-4" />
  </Button>
  </div>
- <p className="mt-8 text-sm font-semibold text-primary">Welcome to Nexora Softworks</p>
+ <p className="mt-8 text-sm font-semibold text-primary">Welcome to AI BOS</p>
  <h2 className="mt-2 text-3xl font-bold tracking-tight">{current.title}</h2>
  <p className="mt-3 text-sm leading-7 text-muted-foreground">{current.description}</p>
  </div>
@@ -193,7 +198,7 @@ function ShortcutHelp({ open, onClose }: { open: boolean; onClose: () => void })
  <div className="flex items-center justify-between gap-4">
  <div>
  <p className="text-sm font-semibold text-primary">Keyboard Shortcuts</p>
- <h2 className="mt-1 text-xl font-bold">Move faster across Nexora</h2>
+ <h2 className="mt-1 text-xl font-bold">Move faster across AI BOS</h2>
  </div>
  <Button aria-label="Close shortcuts" onClick={onClose} size="icon" type="button" variant="ghost">
  <X className="h-4 w-4" />
@@ -222,6 +227,12 @@ export function AppExperience({ items }: { items: WorkspaceSearchItem[] }) {
  const [shortcutsOpen, setShortcutsOpen] = useState(false);
  const [onboardingOpen, setOnboardingOpen] = useState(false);
 
+ useEffect(() => {
+ const resetRoleSensitiveState = () => setRecentPages([]);
+ window.addEventListener(authSessionChangedEvent, resetRoleSensitiveState);
+ return () => window.removeEventListener(authSessionChangedEvent, resetRoleSensitiveState);
+ }, []);
+
  const currentPage = useMemo<PageItem>(() => {
  const searchItem = items.find((item) => item.href === location.pathname);
  return {
@@ -232,7 +243,7 @@ export function AppExperience({ items }: { items: WorkspaceSearchItem[] }) {
  }, [items, location.pathname]);
 
  useEffect(() => {
- if (!isAppRoute(location.pathname)) return;
+ if (!isAppRoute(location.pathname) || !isVisibleWorkspacePath(location.pathname, items)) return;
  setRecentPages((current) => {
  const next = [currentPage, ...current.filter((item) => item.href !== currentPage.href)].slice(0, 8);
  window.localStorage.setItem(recentStorageKey, JSON.stringify(next));
@@ -265,7 +276,7 @@ export function AppExperience({ items }: { items: WorkspaceSearchItem[] }) {
  s: "/settings",
  };
  const href = shortcuts[event.key.toLowerCase()];
- if (href) {
+ if (href && isVisibleWorkspacePath(href, items)) {
  event.preventDefault();
  navigate(href);
  }
@@ -277,7 +288,7 @@ export function AppExperience({ items }: { items: WorkspaceSearchItem[] }) {
  };
  window.addEventListener("keydown", onKeyDown);
  return () => window.removeEventListener("keydown", onKeyDown);
- }, [navigate]);
+ }, [items, navigate]);
 
  useEffect(() => {
  const onClick = (event: MouseEvent) => {

@@ -28,6 +28,7 @@ async function getSessionHeader(): Promise<Record<string, string>> {
 async function fetchSection<T>(section: "overview" | "sales"): Promise<AnalyticsResult<T>> {
  try {
  const response = await fetch(`${getApiBaseUrl()}/analytics?section=${section}`, {
+ cache: "no-store",
  headers: await getSessionHeader(),
  });
 

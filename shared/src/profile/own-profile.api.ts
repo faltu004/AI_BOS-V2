@@ -21,8 +21,14 @@ export type OwnProfileUpdateInput = {
 export type OwnProfileResult = {
  id: string;
  fullName: string;
+ companyName?: string;
  email: string;
+ role?: string;
  avatar: string;
+ employeeCode?: string;
+ designation?: string;
+ employmentType?: string;
+ joiningDate?: string;
  phone?: string;
  location?: string;
  personalInformation?: OwnProfileUpdateInput["personalInformation"];

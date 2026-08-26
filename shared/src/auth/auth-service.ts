@@ -3,6 +3,15 @@ import { decodeJwtPayload, type AuthRole, type JwtReadySession } from "./types";
 
 export const authSessionChangedEvent = "ai_bos_auth_session_changed";
 
+const roleSensitiveStorageKeys = [
+ "ai-bos-recent-pages",
+ "ai-bos-favorite-pages",
+ "admin-completed",
+ "manager-completed",
+] as const;
+
+const roleSensitiveCacheNames = ["api-get-cache", "api-get-cache-v2"] as const;
+
 type LoginResponse = {
  user: {
  email: string;
@@ -50,8 +59,29 @@ function notifyAuthSessionChanged() {
  }
 }
 
+function clearRoleSensitiveBrowserState() {
+ if (typeof window === "undefined") return;
+
+ for (const key of roleSensitiveStorageKeys) {
+ window.localStorage.removeItem(key);
+ window.sessionStorage.removeItem(key);
+ }
+
+ if ("caches" in window) {
+ void Promise.all(roleSensitiveCacheNames.map((name) => window.caches.delete(name)));
+ }
+}
+
 export function persistSession(session: JwtReadySession, rememberMe: boolean) {
- const normalizedSession = normalizeSession(session);
+  const normalizedSession = normalizeSession(session);
+  const previousSession = getStoredAuthSession();
+
+  if (
+    previousSession &&
+    (previousSession.user.email !== normalizedSession.user.email || previousSession.user.role !== normalizedSession.user.role)
+  ) {
+    clearRoleSensitiveBrowserState();
+  }
 
  // Always write to sessionStorage so this tab's session is isolated from
  // other tabs on the same origin/port (e.g. Admin and Manager both on :8081).
@@ -157,6 +187,7 @@ export function getStoredAuthSession(): JwtReadySession | null {
 export function clearAuthSession() {
  localStorage.removeItem("ai_bos_auth_session");
  sessionStorage.removeItem("ai_bos_auth_session");
+ clearRoleSensitiveBrowserState();
  notifyAuthSessionChanged();
 }
 

@@ -14,8 +14,6 @@ import {
  Warehouse,
 } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Controller, useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { Link } from "react-router-dom";
 import { ThemeToggle } from "@shared/ui/ThemeToggle";
 import { Button } from "@shared/ui/button";
@@ -28,7 +26,6 @@ import { Label } from "@shared/ui/label";
 import { useToast } from "@shared/ui/toast-context";
 import { cn } from "@shared/lib/utils";
 import { productCategories, seedProducts, suppliers } from "./products.data";
-import { productFormSchema, type ProductFormValues } from "./products.schema";
 import type { Product, ProductFormInput } from "./products.types";
 import {
  createProductFromInput,

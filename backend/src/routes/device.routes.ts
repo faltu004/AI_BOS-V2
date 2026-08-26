@@ -74,6 +74,10 @@ import {
 } from "../middleware/device-agent-auth.middleware.js";
 
 import {
+  deviceRegisterDiagnosticsMiddleware,
+} from "../middleware/device-register-diagnostics.middleware.js";
+
+import {
   authenticate,
 } from "../middleware/auth.middleware.js";
 
@@ -258,6 +262,7 @@ deviceRoutes.post(
 );
 deviceRoutes.post(
   "/register",
+  deviceRegisterDiagnosticsMiddleware,
   verifyDeviceAgent,
   asyncHandler(
     managedDeviceController
