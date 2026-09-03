@@ -1,6 +1,7 @@
-import { getStoredAuthSession } from "@shared/auth/auth-service";
+import { usePermissions } from "@shared/auth/usePermissions";
 import { EmployeesPage as SharedEmployeesPage } from "@shared/employees";
 
 export function EmployeesPage() {
- return <SharedEmployeesPage canCreateDepartments={getStoredAuthSession()?.user.role !== "Manager"} />;
+  const { hasPermission } = usePermissions();
+  return <SharedEmployeesPage canCreateDepartments={hasPermission("department.create")} />;
 }

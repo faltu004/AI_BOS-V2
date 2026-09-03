@@ -2,8 +2,9 @@ import { getAssignableRoles } from "../constants/user-hierarchy.js";
 import { userRepository } from "../repositories/user.repository.js";
 import { PasswordChangeModel } from "../models/password-history.model.js";
 import { AppError } from "../utils/app-error.js";
-import { hashPassword } from "../utils/password.js";
+import { generateTemporaryPassword, hashPassword } from "../utils/password.js";
 import { assertCanManage } from "./hierarchy.service.js";
+import { auditLogService } from "./audit-log.service.js";
 import { Types } from "mongoose";
 import type {
   ChangeManagerInput,
@@ -271,6 +272,52 @@ export class UserService {
     }
 
     return { deleted: true, id: targetUserId };
+  }
+
+  async resetPassword(actorUserId: string, actorRole: string, targetUserId: string) {
+    const target = await userRepository.findById(targetUserId);
+    if (!target || !target.isActive) {
+      throw new AppError("User not found", 404);
+    }
+
+    await assertCanManage({ id: actorUserId, role: actorRole }, targetUserId);
+
+    const temporaryPassword = generateTemporaryPassword();
+    const passwordHash = await hashPassword(temporaryPassword);
+
+    const updated = await userRepository.updateAccountCredentials(targetUserId, {
+      passwordHash,
+      mustChangePassword: true,
+      passwordChangedAt: new Date(),
+      temporaryPasswordExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    });
+
+    if (!updated) {
+      throw new AppError("User not found", 404);
+    }
+
+    if (Types.ObjectId.isValid(target.id)) {
+      await PasswordChangeModel.create({
+        user: new Types.ObjectId(target.id),
+        previousPasswordHash: passwordHash,
+        changedBy: new Types.ObjectId(actorUserId),
+      });
+    }
+
+    await auditLogService.record({
+      actorUserId,
+      actorRole,
+      category: "user_action",
+      method: "POST",
+      path: `/users/${targetUserId}/reset-password`,
+      resourceType: "user",
+      resourceId: targetUserId,
+      statusCode: 200,
+      success: true,
+      metadata: { targetEmail: target.email },
+    });
+
+    return { temporaryPassword };
   }
 
   async getProfile(userId: string) {

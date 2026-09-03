@@ -99,10 +99,14 @@ test("JWT verifies issuer, audience, subject, and role", async () => {
 test("login rejects invalid passwords and succeeds with current user role", async () => {
   const { authService } = await import("../../backend/src/services/auth.service.ts");
   const { userRepository } = await import("../../backend/src/repositories/user.repository.ts");
+  const { roleRepository } = await import("../../backend/src/repositories/role.repository.ts");
   const { hashPassword } = await import("../../backend/src/utils/password.ts");
 
   const originalFindByEmailWithPassword = userRepository.findByEmailWithPassword;
   const originalUpdateLastLogin = userRepository.updateLastLogin;
+  const originalFindBySlug = roleRepository.findBySlug;
+  // No live MongoDB in this test — permission resolution must not buffer against it.
+  roleRepository.findBySlug = (async () => null) as any;
   const passwordHash = await hashPassword("Secure123");
   const user = {
     id: "user-2",
@@ -131,15 +135,20 @@ test("login rejects invalid passwords and succeeds with current user role", asyn
   } finally {
     userRepository.findByEmailWithPassword = originalFindByEmailWithPassword;
     userRepository.updateLastLogin = originalUpdateLastLogin;
+    roleRepository.findBySlug = originalFindBySlug;
   }
 });
 
 test("refresh uses database user state and rejects inactive users", async () => {
   const { authService } = await import("../../backend/src/services/auth.service.ts");
   const { userRepository } = await import("../../backend/src/repositories/user.repository.ts");
+  const { roleRepository } = await import("../../backend/src/repositories/role.repository.ts");
   const { createTokenPair } = await import("../../backend/src/utils/jwt.ts");
 
   const originalFindById = userRepository.findById;
+  const originalFindBySlug = roleRepository.findBySlug;
+  // No live MongoDB in this test — permission resolution must not buffer against it.
+  roleRepository.findBySlug = (async () => null) as any;
   const token = createTokenPair({ sub: "user-3", role: "Owner" }).refreshToken;
   const activeUser = {
     id: "user-3",
@@ -163,6 +172,7 @@ test("refresh uses database user state and rejects inactive users", async () => 
     await assert.rejects(() => authService.refresh({ refreshToken: token }), /Invalid refresh token/);
   } finally {
     userRepository.findById = originalFindById;
+    roleRepository.findBySlug = originalFindBySlug;
   }
 });
 

@@ -36,6 +36,9 @@ import {
 import {
   deviceEnrollmentTokenService,
 } from "../services/device-enrollment-token.service.js";
+import {
+  deriveDeviceBindingFromFingerprint,
+} from "../utils/device-binding.js";
 
 import {
   deviceCredentialController,
@@ -144,6 +147,35 @@ const verifyDeviceEnrollment:
         )?.trim() ||
         "";
 
+      const receivedDeviceBinding =
+        typeof req.body
+          ?.deviceBinding ===
+        "string"
+          ? req.body.deviceBinding
+              .trim()
+              .toLowerCase()
+          : "";
+
+      if (receivedDeviceBinding) {
+        const derivedDeviceBinding =
+          deriveDeviceBindingFromFingerprint(
+            req.body?.fingerprint,
+          );
+
+        if (
+          !derivedDeviceBinding ||
+          derivedDeviceBinding !==
+            receivedDeviceBinding
+        ) {
+          res.status(401).json({
+            success: false,
+            message:
+              "Invalid device enrollment authentication",
+          });
+          return;
+        }
+      }
+
       if (
         expectedKey &&
         secureSecretEqual(
@@ -162,8 +194,10 @@ const verifyDeviceEnrollment:
 
       const oneTimeCredential =
         await deviceEnrollmentTokenService
-          .verify(
+          .claimForEnrollment(
             receivedKey,
+            receivedDeviceBinding ||
+              undefined,
           );
 
       if (oneTimeCredential) {
@@ -174,6 +208,18 @@ const verifyDeviceEnrollment:
           tokenHash:
             oneTimeCredential
               .tokenHash,
+
+          createdBy:
+            oneTimeCredential
+              .createdBy,
+
+          organizationId:
+            oneTimeCredential
+              .organizationId,
+
+          deviceBinding:
+            oneTimeCredential
+              .deviceBinding,
         };
 
         next();
@@ -226,11 +272,37 @@ deviceRoutes.post(
 );
 
 deviceRoutes.post(
+  "/enrollment-credentials/self",
+  authenticate,
+  asyncHandler(
+    deviceEnrollmentTokenController
+      .issueForCurrentDevice,
+  ),
+);
+
+deviceRoutes.post(
   "/enroll",
   verifyDeviceEnrollment,
   asyncHandler(
     deviceEnrollmentController
       .enroll,
+  ),
+);
+
+deviceRoutes.post(
+  "/credential/recovery/self",
+  authenticate,
+  asyncHandler(
+    deviceCredentialController
+      .requestRecoveryAuthorization,
+  ),
+);
+
+deviceRoutes.post(
+  "/credential/recovery",
+  asyncHandler(
+    deviceCredentialController
+      .recover,
   ),
 );
 
@@ -276,6 +348,14 @@ deviceRoutes.post(
   asyncHandler(
     managedDeviceController
       .heartbeat,
+  ),
+);
+deviceRoutes.post(
+  "/authenticated-user",
+  authenticate,
+  asyncHandler(
+    managedDeviceController
+      .syncAuthenticatedUser,
   ),
 );
 deviceRoutes.get(
@@ -712,11 +792,6 @@ deviceRoutes.get(
       .getByDeviceId,
   ),
 );
-
-
-
-
-
 
 
 

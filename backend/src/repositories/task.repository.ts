@@ -7,7 +7,14 @@ export type TaskCreateData = Omit<Task, "createdAt" | "updatedAt">;
 const assigneePopulate = { path: "assigneeId", select: "fullName email" };
 const reporterPopulate = { path: "reporterId", select: "fullName email" };
 
-function buildTaskFilter(query: ListTasksQuery): FilterQuery<Task> {
+function combineTaskFilters(...filters: FilterQuery<Task>[]): FilterQuery<Task> {
+  const activeFilters = filters.filter((filter) => Object.keys(filter).length > 0);
+  if (activeFilters.length === 0) return {};
+  if (activeFilters.length === 1) return activeFilters[0]!;
+  return { $and: activeFilters };
+}
+
+function buildTaskFilter(query: ListTasksQuery, accessFilter: FilterQuery<Task> = {}): FilterQuery<Task> {
   const filter: FilterQuery<Task> = {};
 
   if (query.search) {
@@ -23,7 +30,7 @@ function buildTaskFilter(query: ListTasksQuery): FilterQuery<Task> {
   if (query.assigneeId) filter.assigneeId = query.assigneeId;
   if (typeof query.archived === "boolean") filter.isArchived = query.archived;
 
-  return filter;
+  return combineTaskFilters(filter, accessFilter);
 }
 
 export class TaskRepository {
@@ -39,8 +46,8 @@ export class TaskRepository {
     return TaskModel.findOne({ taskCode }).select("_id").lean();
   }
 
-  async list(query: ListTasksQuery) {
-    const filter = buildTaskFilter(query);
+  async list(query: ListTasksQuery, accessFilter: FilterQuery<Task> = {}) {
+    const filter = buildTaskFilter(query, accessFilter);
     const skip = (query.page - 1) * query.limit;
     const sort: Record<string, SortOrder> = {
       [query.sortBy]: query.sortOrder === "asc" ? 1 : -1,
@@ -68,16 +75,16 @@ export class TaskRepository {
     };
   }
 
-  async listAll(query: ListTasksQuery) {
-    return TaskModel.find(buildTaskFilter(query))
+  async listAll(query: ListTasksQuery, accessFilter: FilterQuery<Task> = {}) {
+    return TaskModel.find(buildTaskFilter(query, accessFilter))
       .sort({ [query.sortBy]: query.sortOrder === "asc" ? 1 : -1 })
       .populate(assigneePopulate)
       .populate(reporterPopulate)
       .lean();
   }
 
-  async listByProject(projectId: string) {
-    return TaskModel.find({ projectId, isArchived: false })
+  async listByProject(projectId: string, accessFilter: FilterQuery<Task> = {}) {
+    return TaskModel.find(combineTaskFilters({ projectId, isArchived: false }, accessFilter))
       .sort({ createdAt: -1 })
       .populate(assigneePopulate)
       .populate(reporterPopulate)
@@ -98,17 +105,17 @@ export class TaskRepository {
     return TaskModel.findByIdAndDelete(id).select("_id").lean();
   }
 
-  async bulkDelete(ids: string[]) {
-    return TaskModel.deleteMany({ _id: { $in: ids } });
+  async bulkDelete(ids: string[], accessFilter: FilterQuery<Task> = {}) {
+    return TaskModel.deleteMany(combineTaskFilters({ _id: { $in: ids } }, accessFilter));
   }
 
-  async bulkUpdate(ids: string[], updates: UpdateQuery<TaskDocument>) {
-    return TaskModel.updateMany({ _id: { $in: ids } }, updates, {
+  async bulkUpdate(ids: string[], updates: UpdateQuery<TaskDocument>, accessFilter: FilterQuery<Task> = {}) {
+    return TaskModel.updateMany(combineTaskFilters({ _id: { $in: ids } }, accessFilter), updates, {
       runValidators: true,
     });
   }
 
-  async stats() {
+  async stats(accessFilter: FilterQuery<Task> = {}) {
     const now = new Date();
     const dueSoonThreshold = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
@@ -119,7 +126,7 @@ export class TaskRepository {
       dueSoon: number;
       tracked: number;
     }>([
-      { $match: { isArchived: false } },
+      { $match: combineTaskFilters({ isArchived: false }, accessFilter) },
       {
         $facet: {
           total: [{ $count: "count" }],

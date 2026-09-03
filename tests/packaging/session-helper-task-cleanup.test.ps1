@@ -219,7 +219,15 @@ Write-Output "spaced Windows paths handled PASS"
 
 # Packaging wiring and protected production-task characteristics remain present.
 $installerSource = Get-Content -LiteralPath $installerScript -Raw
+$hiddenLauncherSource = Get-Content -LiteralPath (Join-Path $repoRoot "packaging\windows\session-helper-hidden.vbs") -Raw
 $builderConfig = Get-Content -LiteralPath $builderConfigPath -Raw | ConvertFrom-Json
+$parseTokens = $null
+$parseErrors = $null
+[void][System.Management.Automation.Language.Parser]::ParseFile(
+    $installerScript,
+    [ref]$parseTokens,
+    [ref]$parseErrors
+)
 $cleanupResource = @(
     $builderConfig.extraResources | Where-Object {
         $_.from -eq "packaging/windows/session-helper-task-cleanup.ps1" -and
@@ -227,9 +235,27 @@ $cleanupResource = @(
     }
 )
 
+Assert-Equal -Actual $parseErrors.Count -Expected 0 -Message "Session Helper task installer contains PowerShell parse errors."
 Assert-True -Condition $installerSource.Contains('Remove-AiBosStaleUserSessionHelperTask') -Message "Installer does not invoke stale-task cleanup."
 Assert-True -Condition $installerSource.Contains('-RunLevel Limited') -Message "Limited RunLevel was changed or removed."
-Assert-True -Condition $installerSource.Contains('--use-system-ca') -Message "--use-system-ca was changed or removed."
+Assert-True -Condition $installerSource.Contains('-LogonType Interactive') -Message "Interactive LogonType was changed or removed."
+Assert-True -Condition $installerSource.Contains('-AtLogOn') -Message "AtLogOn trigger was changed or removed."
+Assert-True -Condition $installerSource.Contains('-StartWhenAvailable') -Message "StartWhenAvailable was changed or removed."
+Assert-True -Condition $installerSource.Contains('-RestartCount 999') -Message "Durable task restart count was changed or removed."
+Assert-True -Condition $installerSource.Contains('-RestartInterval (New-TimeSpan -Minutes 1)') -Message "Task restart interval was changed or removed."
+Assert-True -Condition $installerSource.Contains('-MultipleInstances IgnoreNew') -Message "IgnoreNew multiple-instance policy was changed or removed."
+Assert-True -Condition $installerSource.Contains('-ExecutionTimeLimit ([TimeSpan]::Zero)') -Message "Unlimited task execution time was changed or removed."
+Assert-True -Condition $installerSource.Contains('Register-ScheduledTask') -Message "Task registration was removed."
+Assert-True -Condition $installerSource.Contains('-Force') -Message "Upgrade task repair was changed or removed."
+Assert-True -Condition $installerSource.Contains('Start-ScheduledTask') -Message "Post-repair task startup was changed or removed."
+Assert-True -Condition $installerSource.Contains('Resolve-InteractiveUser') -Message "Interactive-user resolution was changed or removed."
+Assert-True -Condition $installerSource.Contains('"S-1-5-18"') -Message "LocalSystem rejection guard was changed or removed."
+Assert-True -Condition $hiddenLauncherSource.Contains('--use-system-ca') -Message "--use-system-ca was changed or removed."
+Assert-True -Condition $hiddenLauncherSource.Contains('shell.Run(command, 0, True)') -Message "Hidden waited helper launch was changed or removed."
+Assert-True -Condition $hiddenLauncherSource.Contains('WScript.Sleep RetryDelayMilliseconds') -Message "Hidden launcher retry supervision was changed or removed."
+Assert-True -Condition $hiddenLauncherSource.Contains('If launchError = 0 And exitCode = 0 Then') -Message "Hidden launcher clean-exit handling was changed or removed."
+Assert-True -Condition (-not $hiddenLauncherSource.Contains('cmd.exe')) -Message "Hidden launcher must not introduce cmd.exe."
+Assert-True -Condition (-not $hiddenLauncherSource.Contains('powershell.exe')) -Message "Hidden launcher must not introduce powershell.exe."
 Assert-True -Condition $installerSource.Contains('$taskName = "AI BOS Session Helper"') -Message "Production task name was changed."
 Assert-Equal -Actual $cleanupResource.Count -Expected 1 -Message "Cleanup helper is not packaged exactly once."
 Write-Output "installer packaging and production task invariants PASS"

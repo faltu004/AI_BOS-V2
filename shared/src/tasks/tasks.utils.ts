@@ -2,11 +2,7 @@ import { formatDuration } from "@shared/lib/utils-helpers";
 import type { Task, TaskPriority, TaskStatus } from "./tasks.types";
 
 export function getTaskCompletion(task: Task) {
- if (task.checklist.length === 0) {
- return task.status === "Completed" ? 100 : 0;
- }
-
- return Math.round((task.checklist.filter((item) => item.done).length / task.checklist.length) * 100);
+ return task.status === "Completed" ? 100 : Math.max(0, Math.min(100, task.progress));
 }
 
 export function getTaskStats(tasks: Task[]) {
@@ -40,6 +36,7 @@ export function statusClass(status: TaskStatus) {
  const classes: Record<TaskStatus, string> = {
  Todo: "bg-muted text-muted-foreground",
  "In Progress": "bg-primary/10 text-primary",
+ Blocked: "bg-rose-500/10 text-rose-600 dark:text-rose-300",
  Review: "bg-violet-500/10 text-violet-600 dark:text-violet-300",
  Testing: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-300",
  Completed: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300",

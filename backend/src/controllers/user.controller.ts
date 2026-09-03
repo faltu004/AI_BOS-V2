@@ -66,6 +66,15 @@ export class UserController {
     });
   };
 
+  resetPassword: RequestHandler = async (req, res) => {
+    const result = await userService.resetPassword(req.user!.id, req.user!.role, req.params.id);
+
+    sendSuccess(res, 200, {
+      message: "Temporary password generated successfully",
+      data: result,
+    });
+  };
+
   delete: RequestHandler = async (req, res) => {
     const result = await userService.deleteUser(req.user!.id, req.user!.role, req.params.id);
 

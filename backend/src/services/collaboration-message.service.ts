@@ -34,7 +34,10 @@ export class CollaborationMessageService {
       throw new AppError("A message needs text or an attachment", 400);
     }
 
-    const mentionedUserIds = notificationService.parseMentions(body);
+    const mentionedUserIds = await collaborationRoomService.filterAuthorizedMentionUserIds(
+      room,
+      notificationService.parseMentions(body),
+    );
 
     const message = await collaborationMessageRepository.create({
       roomId: room._id as Types.ObjectId,
@@ -77,7 +80,11 @@ export class CollaborationMessageService {
       throw new AppError("You can only edit your own messages", 403);
     }
 
-    const mentionedUserIds = notificationService.parseMentions(body);
+    const room = await collaborationRoomService.requireRoomAccess(userId, message.roomId.toString());
+    const mentionedUserIds = await collaborationRoomService.filterAuthorizedMentionUserIds(
+      room,
+      notificationService.parseMentions(body),
+    );
     return collaborationMessageRepository.update(messageId, {
       body: body.trim(),
       mentionedUserIds,

@@ -62,6 +62,26 @@ export class ManagedDeviceController {
       });
     };
 
+  syncAuthenticatedUser: RequestHandler =
+    async (req, res) => {
+      const result =
+        await managedDeviceService
+          .syncAuthenticatedUser({
+            userId: req.user?.id,
+            deviceBinding:
+              req.body?.deviceBinding,
+            active:
+              req.body?.active,
+          });
+
+      res.status(200).json({
+        success: true,
+        message:
+          "Authenticated device user synchronized",
+        data: result,
+      });
+    };
+
   list: RequestHandler =
     async (_req, res) => {
       const devices =

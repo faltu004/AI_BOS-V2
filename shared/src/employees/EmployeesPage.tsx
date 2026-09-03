@@ -8,8 +8,10 @@ import {
  CalendarDays,
  Check,
  Clock3,
+ Copy,
  FileText,
  GraduationCap,
+ KeyRound,
  Phone,
  Plus,
  Search,
@@ -46,6 +48,7 @@ import {
  fetchDepartments,
  fetchEmployees,
  fetchHolidays,
+ resetEmployeePassword,
  type DepartmentOption,
 } from "./employees.api";
 import { DepartmentGroupPanel } from "./DepartmentGroupPanel";
@@ -186,7 +189,15 @@ function EmployeeFormModal({
  );
 }
 
-function EmployeeProfile({ employee }: { employee: Employee }) {
+function EmployeeProfile({
+ employee,
+ onResetPassword,
+ resettingPassword,
+}: {
+ employee: Employee;
+ onResetPassword?: (employee: Employee) => void;
+ resettingPassword?: boolean;
+}) {
  return (
  <Card className="glass overflow-hidden">
  <div className="h-28 bg-gradient-to-r from-primary/30 via-emerald-400/20 to-accent/30" />
@@ -202,9 +213,23 @@ function EmployeeProfile({ employee }: { employee: Employee }) {
  </p>
  </div>
  </div>
+ <div className="flex flex-wrap items-center gap-2">
  <span className="w-fit rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-300">
  {employee.status}
  </span>
+ {onResetPassword && (
+ <Button
+ disabled={resettingPassword}
+ onClick={() => onResetPassword(employee)}
+ size="sm"
+ type="button"
+ variant="outline"
+ >
+ <KeyRound className="h-4 w-4" />
+ {resettingPassword ? "Resetting..." : "Reset Password"}
+ </Button>
+ )}
+ </div>
  </div>
  <div className="grid gap-4 lg:grid-cols-3">
  <InfoBlock icon={UserRound} title="Personal Information" rows={[
@@ -254,6 +279,49 @@ function EmployeeProfile({ employee }: { employee: Employee }) {
  </Card>
  </CardContent>
  </Card>
+ );
+}
+
+function TemporaryPasswordDialog({
+ employeeName,
+ onClose,
+ password,
+}: {
+ employeeName: string;
+ onClose: () => void;
+ password: string;
+}) {
+ const [copied, setCopied] = useState(false);
+
+ const copyPassword = async () => {
+ try {
+ await navigator.clipboard.writeText(password);
+ setCopied(true);
+ window.setTimeout(() => setCopied(false), 2000);
+ } catch {
+ // Clipboard access can be denied by the browser; the password is still visible to select manually.
+ }
+ };
+
+ return (
+ <Dialog className="max-w-md" onClose={onClose}>
+ <div className="mb-4">
+ <h2 className="text-2xl font-bold">Temporary Password</h2>
+ <p className="mt-1 text-sm text-muted-foreground">
+ Share this with {employeeName} through a secure channel. They will be required to set a new password on next login.
+ </p>
+ </div>
+ <div className="flex items-center gap-2 rounded-lg border bg-background p-3">
+ <code className="flex-1 select-all break-all font-mono text-sm">{password}</code>
+ <Button onClick={() => void copyPassword()} size="icon" type="button" variant="outline">
+ {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+ </Button>
+ </div>
+ <p className="mt-3 text-xs text-muted-foreground">This password will not be shown again once you close this dialog.</p>
+ <Button className="mt-6 w-full" onClick={onClose} type="button">
+ Done
+ </Button>
+ </Dialog>
  );
 }
 
@@ -323,6 +391,8 @@ export function EmployeesPage({ attendanceMode = "manage", canCreateDepartments 
  const [isCreatingDepartment, setIsCreatingDepartment] = useState(false);
  const [loadingEmployees, setLoadingEmployees] = useState(true);
  const [employeesAccess, setEmployeesAccess] = useState<"ok" | "forbidden" | "error">("ok");
+ const [resettingPasswordId, setResettingPasswordId] = useState<string>();
+ const [temporaryPasswordResult, setTemporaryPasswordResult] = useState<{ employeeName: string; password: string } | null>(null);
  const loadSequenceRef = useRef(0);
  const attendanceLoadSequenceRef = useRef(0);
  const { toast } = useToast();
@@ -483,6 +553,18 @@ export function EmployeesPage({ attendanceMode = "manage", canCreateDepartments 
  toast({ title: "Could not create login account", description: (error as Error).message, type: "error" });
  } finally {
  setIsCreatingAccount(false);
+ }
+ };
+
+ const handleResetPassword = async (employee: Employee) => {
+ setResettingPasswordId(employee.id);
+ try {
+ const { temporaryPassword } = await resetEmployeePassword(employee.id);
+ setTemporaryPasswordResult({ employeeName: employee.name, password: temporaryPassword });
+ } catch (error) {
+ toast({ title: "Could not reset password", description: (error as Error).message, type: "error" });
+ } finally {
+ setResettingPasswordId(undefined);
  }
  };
 
@@ -719,7 +801,11 @@ export function EmployeesPage({ attendanceMode = "manage", canCreateDepartments 
 
  <section>
  {selectedEmployee ? (
- <EmployeeProfile employee={selectedEmployee} />
+ <EmployeeProfile
+ employee={selectedEmployee}
+ onResetPassword={handleResetPassword}
+ resettingPassword={resettingPasswordId === selectedEmployee.id}
+ />
  ) : (
  <Card className="glass">
  <CardContent className="p-6 text-sm text-muted-foreground">Select an employee after records load.</CardContent>
@@ -728,6 +814,14 @@ export function EmployeesPage({ attendanceMode = "manage", canCreateDepartments 
  </section>
  </div>
  </div>
+
+ {temporaryPasswordResult && (
+ <TemporaryPasswordDialog
+ employeeName={temporaryPasswordResult.employeeName}
+ onClose={() => setTemporaryPasswordResult(null)}
+ password={temporaryPasswordResult.password}
+ />
+ )}
 
  {isAddingEmployee && (
  <EmployeeFormModal

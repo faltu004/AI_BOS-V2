@@ -40,6 +40,7 @@ test("managed device heartbeat persists interactive session telemetry fields", a
       sessionTelemetryAt: "2026-08-18T10:00:01.000Z",
       sessionTelemetryStale: false,
       lastHeartbeatLatencyMs: 27,
+      username: "SYSTEM",
     });
 
     const heartbeatCall = calls[0] as any[];
@@ -52,6 +53,7 @@ test("managed device heartbeat persists interactive session telemetry fields", a
     assert.equal(heartbeatCall[2].sessionTelemetryAt.toISOString(), "2026-08-18T10:00:01.000Z");
     assert.equal(heartbeatCall[2].sessionTelemetryStale, false);
     assert.equal(heartbeatCall[2].lastHeartbeatLatencyMs, 27);
+    assert.equal("username" in heartbeatCall[2], false);
     assert.equal(heartbeatCall[2].status, "online");
 
     const metricCall = calls[1] as any[];
@@ -60,6 +62,157 @@ test("managed device heartbeat persists interactive session telemetry fields", a
   } finally {
     managedDeviceRepository.updateHeartbeat = originalUpdateHeartbeat;
     deviceMetricRepository.create = originalCreateMetric;
+  }
+});
+
+test("Agent registration clears stale authenticated identity while heartbeat cannot write SYSTEM", async () => {
+  const { managedDeviceRepository } = await import("../../backend/src/repositories/managed-device.repository.ts");
+  const { ManagedDeviceModel } = await import("../../backend/src/models/managed-device.model.ts");
+
+  const originalFindOneAndUpdate = ManagedDeviceModel.findOneAndUpdate;
+  const calls: any[] = [];
+
+  ManagedDeviceModel.findOneAndUpdate = ((filter: unknown, update: unknown, options: unknown) => {
+    calls.push([filter, update, options]);
+    return {};
+  }) as any;
+
+  try {
+    await managedDeviceRepository.upsertRegistration({
+      deviceId: "DEV-SESSION",
+      fingerprint: "fingerprint",
+      hostname: "WORKSTATION",
+      username: "SYSTEM",
+      status: "online",
+      lastSeenAt: new Date("2026-08-18T10:00:00.000Z"),
+    }, {
+      clearAuthenticatedUser: true,
+    });
+
+    await managedDeviceRepository.updateHeartbeat("DEV-SESSION", {
+      username: "SYSTEM",
+      status: "online",
+      lastSeenAt: new Date("2026-08-18T10:00:01.000Z"),
+    });
+
+    assert.equal(calls[0][1].$set.username, undefined);
+    assert.deepEqual(calls[0][1].$unset, { username: "" });
+    assert.equal(calls[1][1].$set.username, undefined);
+  } finally {
+    ManagedDeviceModel.findOneAndUpdate = originalFindOneAndUpdate;
+  }
+});
+
+test("authenticated Employee accounts replace and conditionally clear the managed device user", async () => {
+  const { deriveDeviceBindingFromFingerprint } = await import(
+    "../../backend/src/utils/device-binding.ts"
+  );
+  const { managedDeviceService } = await import("../../backend/src/services/managed-device.service.ts");
+  const { managedDeviceRepository } = await import("../../backend/src/repositories/managed-device.repository.ts");
+  const { userRepository } = await import("../../backend/src/repositories/user.repository.ts");
+  const { DeviceCredentialModel } = await import("../../backend/src/models/device-credential.model.ts");
+
+  const originalFindCredential = DeviceCredentialModel.findOne;
+  const originalFindUser = userRepository.findById;
+  const originalFindDevice = managedDeviceRepository.findByDeviceId;
+  const originalFindIdentities = managedDeviceRepository.findDeviceIdentities;
+  const originalSetUser = managedDeviceRepository.setAuthenticatedUser;
+  const originalClearUser = managedDeviceRepository.clearAuthenticatedUser;
+
+  const fingerprint = "physical-device-fingerprint";
+  const deviceBinding = deriveDeviceBindingFromFingerprint(fingerprint)!;
+  let storedUsername: string | undefined;
+
+  DeviceCredentialModel.findOne = (() => ({
+    select: () => ({
+      lean: async () => ({
+        deviceId: "DEV-AUTH-USER",
+        organizationId: "ORG-1",
+        deviceBinding,
+        status: "active",
+      }),
+    }),
+  })) as any;
+  userRepository.findById = (async (userId: string) => ({
+    id: userId,
+    isActive: true,
+    fullName: userId === "employee-b" ? "Employee B" : "Employee A",
+    organizationId: { toString: () => "ORG-1" },
+  })) as any;
+  managedDeviceRepository.findByDeviceId = (async () => ({
+    deviceId: "DEV-AUTH-USER",
+    fingerprint,
+  })) as any;
+  managedDeviceRepository.findDeviceIdentities = (async () => []) as any;
+  managedDeviceRepository.setAuthenticatedUser = (async (_deviceId: string, fullName: string) => {
+    storedUsername = fullName;
+    return { deviceId: "DEV-AUTH-USER", username: fullName };
+  }) as any;
+  managedDeviceRepository.clearAuthenticatedUser = (async (_deviceId: string, fullName: string) => {
+    if (storedUsername === fullName) storedUsername = undefined;
+    return null;
+  }) as any;
+
+  try {
+    const employeeA = await managedDeviceService.syncAuthenticatedUser({
+      userId: "employee-a",
+      deviceBinding,
+      active: true,
+    });
+    assert.equal(employeeA.loggedInUser, "Employee A");
+    assert.equal(storedUsername, "Employee A");
+
+    const employeeB = await managedDeviceService.syncAuthenticatedUser({
+      userId: "employee-b",
+      deviceBinding,
+      active: true,
+    });
+    assert.equal(employeeB.loggedInUser, "Employee B");
+    assert.equal(storedUsername, "Employee B");
+
+    await managedDeviceService.syncAuthenticatedUser({
+      userId: "employee-a",
+      deviceBinding,
+      active: false,
+    });
+    assert.equal(storedUsername, "Employee B");
+
+    await managedDeviceService.syncAuthenticatedUser({
+      userId: "employee-b",
+      deviceBinding,
+      active: false,
+    });
+    assert.equal(storedUsername, undefined);
+  } finally {
+    DeviceCredentialModel.findOne = originalFindCredential;
+    userRepository.findById = originalFindUser;
+    managedDeviceRepository.findByDeviceId = originalFindDevice;
+    managedDeviceRepository.findDeviceIdentities = originalFindIdentities;
+    managedDeviceRepository.setAuthenticatedUser = originalSetUser;
+    managedDeviceRepository.clearAuthenticatedUser = originalClearUser;
+  }
+});
+
+test("managed device responses hide legacy SYSTEM identity without changing Windows currentUser", async () => {
+  const { managedDeviceService } = await import("../../backend/src/services/managed-device.service.ts");
+  const { managedDeviceRepository } = await import("../../backend/src/repositories/managed-device.repository.ts");
+
+  const originalFindDevice = managedDeviceRepository.findByDeviceId;
+  managedDeviceRepository.findByDeviceId = (async () => ({
+    deviceId: "DEV-SYSTEM",
+    fingerprint: "fingerprint",
+    hostname: "WORKSTATION",
+    username: "SYSTEM",
+    currentUser: "owners",
+    status: "online",
+  })) as any;
+
+  try {
+    const device = await managedDeviceService.getByDeviceId("DEV-SYSTEM");
+    assert.equal(device.username, undefined);
+    assert.equal(device.currentUser, "owners");
+  } finally {
+    managedDeviceRepository.findByDeviceId = originalFindDevice;
   }
 });
 

@@ -26,6 +26,12 @@ contextBridge.exposeInMainWorld(
   "electronAPI",
   Object.freeze({
     platform: process.platform,
-    config: runtimeConfig
+    config: runtimeConfig,
+    ensureDeviceEnrollment: (accessToken, active = true) =>
+      ipcRenderer.invoke(
+        "aibos:ensure-device-enrollment",
+        accessToken,
+        active,
+      )
   }),
 );

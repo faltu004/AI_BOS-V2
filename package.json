@@ -20,7 +20,6 @@
     "admin:build": "npm --prefix admin run build",
     "admin:preview": "npm --prefix admin run preview",
     "admin:lint": "npm --prefix admin run lint",
-
     "backend:dev": "npm --prefix backend run dev",
     "backend:build": "npm --prefix backend run build",
     "backend:start": "npm --prefix backend start",
@@ -72,6 +71,7 @@
     }
   },
   "dependencies": {
-    "axios": "^1.19.0"
+    "axios": "^1.19.0",
+    "electron-updater": "^6.8.9"
   }
 }

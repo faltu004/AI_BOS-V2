@@ -2,6 +2,7 @@ import { organizationRepository } from "../repositories/organization.repository.
 import { organizationSettingsRepository } from "../repositories/organization-settings.repository.js";
 import type { WorkspacePreferences } from "../models/organization-settings.model.js";
 import type { UpdateModuleAccessInput, UpdateOrganizationSettingsInput } from "../validation/organization-settings.validation.js";
+import { getIO } from "../realtime/socket-server.js";
 
 export class OrganizationSettingsService {
   async get() {
@@ -46,10 +47,19 @@ export class OrganizationSettingsService {
   async updateModuleAccess(input: UpdateModuleAccessInput, userId?: string) {
     const organization = await organizationRepository.getOrCreateDefault();
     const current = await organizationSettingsRepository.getOrCreateDefault(organization._id);
-    return organizationSettingsRepository.upsertGlobal({
+    const previousControlMode = current.moduleAccess.administratorControlMode;
+    const updated = await organizationSettingsRepository.upsertGlobal({
       moduleAccess: { ...current.moduleAccess, ...input },
       updatedBy: userId,
     });
+
+    if (input.administratorControlMode && input.administratorControlMode !== previousControlMode) {
+      getIO()?.emit("ADMIN_CONTROL_MODE_CHANGED", {
+        administratorControlMode: input.administratorControlMode,
+      });
+    }
+
+    return updated;
   }
 }
 

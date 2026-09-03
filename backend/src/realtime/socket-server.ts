@@ -4,7 +4,7 @@
 } from "../utils/secure-secret.js";
 import type { Server as HttpServer } from "node:http";
 import { Server, type Socket } from "socket.io";
-import { appConfig } from "../config/app.js";
+import { isAllowedOrigin } from "../config/app.js";
 import { collaborationMessageService } from "../services/collaboration-message.service.js";
 import { collaborationNoteService } from "../services/collaboration-note.service.js";
 import {
@@ -45,7 +45,12 @@ function ackError(ack: SocketAck | undefined, error: unknown) {
 export function initSocketServer(httpServer: HttpServer) {
   const io = new Server(httpServer, {
     cors: {
-      origin: appConfig.clientOrigins,
+      origin: (origin, callback) => {
+        if (!origin || isAllowedOrigin(origin)) {
+          return callback(null, true);
+        }
+        return callback(new Error("Not allowed by CORS"), false);
+      },
       credentials: true,
     },
   });
@@ -105,7 +110,7 @@ export function initSocketServer(httpServer: HttpServer) {
         void (async () => {
           try {
             const user = socket.data.user as SocketUser;
-            const { message, notifications } = await collaborationMessageService.send(
+            const { message } = await collaborationMessageService.send(
               user.id,
               payload.roomId,
               payload.body,
@@ -113,9 +118,6 @@ export function initSocketServer(httpServer: HttpServer) {
             );
 
             io.to(payload.roomId).emit("message:new", message);
-            for (const notification of notifications) {
-              io.to(personalRoom(notification.recipientUserId.toString())).emit("notification:new", notification);
-            }
 
             ack?.({ ok: true, data: message });
           } catch (error) {
@@ -185,15 +187,26 @@ export function initSocketServer(httpServer: HttpServer) {
       },
     );
 
-    socket.on("typing:start", (payload: { roomId: string }) => {
-      const user = socket.data.user as SocketUser;
-      socket.to(payload.roomId).emit("typing:start", { userId: user.id, roomId: payload.roomId });
-    });
+    const relayTyping = (eventName: "typing:start" | "typing:stop", payload: unknown) => {
+      void (async () => {
+        const roomId =
+          typeof payload === "object" && payload !== null && "roomId" in payload && typeof payload.roomId === "string"
+            ? payload.roomId.trim()
+            : "";
+        if (!roomId) return;
 
-    socket.on("typing:stop", (payload: { roomId: string }) => {
-      const user = socket.data.user as SocketUser;
-      socket.to(payload.roomId).emit("typing:stop", { userId: user.id, roomId: payload.roomId });
-    });
+        const user = socket.data.user as SocketUser;
+        try {
+          await collaborationRoomService.requireRoomAccess(user.id, roomId);
+          socket.to(roomId).emit(eventName, { userId: user.id, roomId });
+        } catch {
+          // Typing is best effort; never disclose room existence or membership.
+        }
+      })();
+    };
+
+    socket.on("typing:start", (payload: unknown) => relayTyping("typing:start", payload));
+    socket.on("typing:stop", (payload: unknown) => relayTyping("typing:stop", payload));
   });
 
   initRemoteSupportNamespace(
@@ -1223,5 +1236,4 @@ export function disconnectRemoteSupportSession(
       true,
     );
 }
-
 

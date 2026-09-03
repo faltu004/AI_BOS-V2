@@ -44,6 +44,7 @@ const LazyAppExperience = lazyNamed(() => import("./AppExperience"), "AppExperie
 const LazyCommandPalette = lazyNamed(() => import("./CommandPalette"), "CommandPalette");
 const LazyFloatingAIAssistant = lazyNamed(() => import("@shared/ai"), "FloatingAIAssistant");
 const LazyPwaChrome = lazyNamed(() => import("@shared/pwa"), "PwaChrome");
+const LazyNotificationPopupListener = lazyNamed(() => import("@shared/notifications"), "NotificationPopupListener");
 
 function useIdleMount() {
   const [mounted, setMounted] = useState(false);
@@ -981,6 +982,7 @@ const WorkspaceChrome = memo(function WorkspaceChrome({
       <LazyFloatingAIAssistant />
       <LazyAppExperience items={visibleSearchItems} />
       <LazyPwaChrome />
+      <LazyNotificationPopupListener />
     </>
   );
 });

@@ -6,6 +6,11 @@ import type { JwtReadySession } from "../../shared/src/auth/types.ts";
 
 installStorageMocks();
 
+const deviceUserSyncCalls: Array<[
+  string,
+  boolean | undefined,
+]> = [];
+
 Object.defineProperty(globalThis, "window", {
   configurable: true,
   value: {
@@ -13,6 +18,18 @@ Object.defineProperty(globalThis, "window", {
     dispatchEvent: () => true,
     localStorage,
     sessionStorage,
+    electronAPI: {
+      ensureDeviceEnrollment: async (
+        accessToken: string,
+        active?: boolean,
+      ) => {
+        deviceUserSyncCalls.push([
+          accessToken,
+          active,
+        ]);
+        return { state: "enrolled" };
+      },
+    },
   },
 });
 
@@ -46,10 +63,14 @@ test("persistSession stores non-remembered sessions in sessionStorage", () => {
 });
 
 test("clearAuthSession removes both storage locations", () => {
+  deviceUserSyncCalls.length = 0;
   persistSession(buildSession("hr@example.com", "HR"), true);
   clearAuthSession();
 
   assert.equal(getStoredAuthSession(), null);
+  assert.deepEqual(deviceUserSyncCalls, [
+    ["access-token", false],
+  ]);
 });
 
 test("a remembered session in another tab does not hijack this tab's active session", () => {

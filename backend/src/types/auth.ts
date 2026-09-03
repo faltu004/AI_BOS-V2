@@ -16,6 +16,7 @@ export type PublicUser = {
   isProfileComplete: boolean;
   mustChangePassword: boolean;
   hasActiveFaceEnrollment?: boolean;
+  permissions: string[];
   lastLoginAt?: Date;
   createdAt: Date;
   updatedAt: Date;

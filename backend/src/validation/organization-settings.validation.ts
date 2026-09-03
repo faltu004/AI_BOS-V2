@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { dateFormats } from "../models/organization-settings.model.js";
+import { administratorControlModes, dateFormats } from "../models/organization-settings.model.js";
 import { weekdays } from "../constants/weekday.js";
 
 const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -40,6 +40,7 @@ export type UpdateOrganizationSettingsInput = z.infer<typeof updateOrganizationS
 
 export const updateModuleAccessSchema = z.object({
   adminPanelEnabled: z.boolean(),
+  administratorControlMode: z.enum(administratorControlModes).optional(),
 });
 
 export type UpdateModuleAccessInput = z.infer<typeof updateModuleAccessSchema>;

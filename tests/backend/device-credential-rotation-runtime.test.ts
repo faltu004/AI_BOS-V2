@@ -71,12 +71,11 @@ const testRoot = path.join(
 const originalProgramData = process.env.ProgramData;
 const originalProgramDataAlt = process.env.PROGRAMDATA;
 const originalPath = process.env.PATH;
+const originalSystemRoot = process.env.SystemRoot;
 
 process.env.ProgramData = path.join(testRoot, "ProgramData");
 process.env.PROGRAMDATA = process.env.ProgramData;
-// See agent-instance-lock.test.ts: avoids the icacls ACL step locking
-// the non-elevated test process out of its own temp directory.
-process.env.PATH = "";
+process.env.SystemRoot = path.join(testRoot, "MissingWindowsRoot");
 
 const protectedRoot = path.join(
   process.env.ProgramData,
@@ -347,6 +346,7 @@ test.after(async () => {
   process.env.ProgramData = originalProgramData;
   process.env.PROGRAMDATA = originalProgramDataAlt;
   process.env.PATH = originalPath;
+  process.env.SystemRoot = originalSystemRoot;
 
   await new Promise<void>((resolve) => server.close(() => resolve()));
   await rm(testRoot, { recursive: true, force: true });

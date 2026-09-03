@@ -12,6 +12,12 @@ import {
   startDeviceCredentialRotationWatcher,
 } from "./device-credential-rotation.js";
 import {
+  startDeviceBootstrapServer,
+} from "./device-bootstrap-server.js";
+import {
+  recoverRejectedDeviceCredential,
+} from "./device-credential-recovery.js";
+import {
   isDeviceEnrollmentRequiredError,
   prepareDeviceIdentity,
 } from "./device-enrollment.js";
@@ -64,10 +70,24 @@ let startupTimer:
 let startupRetryDelay =
   STARTUP_RETRY_DELAY;
 
+let startupInProgress =
+  false;
+
+let immediateStartupRequested =
+  false;
+
+let stopBootstrapServer:
+  StopHandler |
+  null =
+    null;
+
 let instanceLock:
   AgentInstanceLock |
   null =
     null;
+
+let credentialRecoveryRequired =
+  false;
 
 async function stopAllComponents():
   Promise<void> {
@@ -119,6 +139,18 @@ async function shutdown(
   }
 
   await stopAllComponents();
+
+  if (stopBootstrapServer) {
+    try {
+      await stopBootstrapServer();
+    } catch (error) {
+      console.error(
+        "[Agent] Enrollment handoff cleanup failed:",
+        error,
+      );
+    }
+    stopBootstrapServer = null;
+  }
 
   if (instanceLock) {
     await instanceLock.release();
@@ -172,11 +204,39 @@ function scheduleStartupRetry():
     );
 }
 
+function requestImmediateStartupRetry(): void {
+  if (shuttingDown) {
+    return;
+  }
+
+  if (startupInProgress) {
+    immediateStartupRequested = true;
+    return;
+  }
+
+  immediateStartupRequested = false;
+
+  if (startupTimer) {
+    clearTimeout(startupTimer);
+  }
+
+  startupTimer = setTimeout(() => {
+    startupTimer = null;
+    void start();
+  }, 0);
+}
+
 async function start():
   Promise<void> {
   if (shuttingDown) {
     return;
   }
+
+  if (startupInProgress) {
+    return;
+  }
+
+  startupInProgress = true;
 
   console.log(
     "=================================",
@@ -220,6 +280,9 @@ async function start():
 
     const deviceId =
       await prepareDeviceIdentity();
+
+    credentialRecoveryRequired =
+      false;
 
     if (shuttingDown) {
       return;
@@ -300,12 +363,16 @@ console.log("");
         error,
       )
     ) {
+      credentialRecoveryRequired =
+        error.reason ===
+          "invalid_stored_credential";
+
       console.error(
-        "[Agent] DEVICE_ENROLLMENT_REQUIRED: stored device credential is invalid and no protected bootstrap enrollment artifact is available.",
+        "[Agent] DEVICE_ENROLLMENT_REQUIRED: a valid local credential is unavailable; explicit authorized credential recovery is required.",
       );
 
       await stopAllComponents();
-
+      scheduleStartupRetry();
       return;
     }
 
@@ -329,6 +396,13 @@ console.log("");
     await stopAllComponents();
 
     scheduleStartupRetry();
+  } finally {
+    startupInProgress = false;
+
+    if (immediateStartupRequested) {
+      immediateStartupRequested = false;
+      requestImmediateStartupRetry();
+    }
   }
 }
 
@@ -380,11 +454,28 @@ async function launch():
   instanceLock =
     lock;
 
+  const bootstrapServer =
+    await startDeviceBootstrapServer({
+      onBootstrapStored:
+        requestImmediateStartupRetry,
+      isCredentialRecoveryRequired:
+        () =>
+          credentialRecoveryRequired,
+      onCredentialRecoveryAuthorized:
+        async (input) => {
+          await recoverRejectedDeviceCredential(
+            input,
+          );
+          credentialRecoveryRequired =
+            false;
+          requestImmediateStartupRetry();
+        },
+    });
+
+  stopBootstrapServer =
+    bootstrapServer.stop;
+
   void start();
 }
 
 void launch();
-
-
-
-

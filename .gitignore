@@ -47,4 +47,12 @@ phase21e-auth-audit-inspection.txt
 
 # Ad-hoc temp/result files dropped at the repo root
 _tmp-*.mjs
-*result.txt
+*result.txtadmin.env.local
+backend.env
+device-agent.env
+frontend.env.local
+pilot-build/**/agent.env
+admin.env.local
+.claude/state/
+.hurc-harness/
+scratch/

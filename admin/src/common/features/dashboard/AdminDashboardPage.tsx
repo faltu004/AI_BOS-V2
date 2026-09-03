@@ -4,8 +4,10 @@ import {
  CalendarDays,
  Clock3,
  CheckSquare,
+ FileText,
  FolderKanban,
  Lock,
+ LogIn,
  MessageSquare,
  Monitor,
  Plug,
@@ -17,10 +19,13 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getStoredAuthSession } from "@shared/auth/auth-service";
+import { fetchAuditLogs } from "@shared/audit-backup/audit-backup.api";
+import type { AuditCategory, AuditLogEntry } from "@shared/audit-backup/audit-backup.schema";
 import { fetchIntegrations } from "@shared/integrations/integration.api";
 import { fetchModuleAccess, updateModuleAccess, type ModuleAccess } from "@shared/lib/module-access.api";
 import {
  ProfessionalDashboard,
+ type ProfessionalDashboardActivity,
  type ProfessionalDashboardConfig,
 } from "@shared/platform/ProfessionalDashboard";
 import { liveSyncIntervalMs, sharedDataChangedEvent } from "@shared/realtime/data-sync";
@@ -55,6 +60,51 @@ const adminNav = [
  },
 ];
 
+// Note: AuditCategory here (shared/src/audit-backup/audit-backup.schema.ts) is missing
+// "ai_activity" and "device_update", which the backend's own AuditCategory does have
+// (backend/src/constants/audit.ts) - the `??` fallbacks below cover those gracefully.
+const auditCategoryLabels: Record<AuditCategory, string> = {
+ login: "Login",
+ logout: "Logout",
+ user_action: "User Action",
+ crud: "Record Updated",
+ permission_change: "Permission Changed",
+ settings_change: "Settings Changed",
+ file_activity: "File Activity",
+ report_download: "Report Downloaded",
+};
+
+const auditCategoryIcons: Record<AuditCategory, typeof ShieldCheck> = {
+ login: LogIn,
+ logout: LogIn,
+ user_action: UsersRound,
+ crud: FolderKanban,
+ permission_change: ShieldAlert,
+ settings_change: Settings,
+ file_activity: FileText,
+ report_download: BarChart3,
+};
+
+function formatRelativeTime(iso: string): string {
+ const diffMs = Date.now() - new Date(iso).getTime();
+ const minutes = Math.round(diffMs / 60000);
+ if (minutes < 1) return "Just now";
+ if (minutes < 60) return `${minutes} min ago`;
+ const hours = Math.round(minutes / 60);
+ if (hours < 24) return `${hours} hr${hours === 1 ? "" : "s"} ago`;
+ const days = Math.round(hours / 24);
+ return `${days} day${days === 1 ? "" : "s"} ago`;
+}
+
+function toActivityItem(entry: AuditLogEntry): ProfessionalDashboardActivity {
+ return {
+ title: auditCategoryLabels[entry.category] ?? entry.category,
+ detail: `${entry.actorEmail ?? "System"} - ${entry.method} ${entry.resourceType ?? entry.path}`,
+ time: formatRelativeTime(entry.createdAt),
+ icon: auditCategoryIcons[entry.category] ?? FileText,
+ };
+}
+
 const panelConfig: ProfessionalDashboardConfig = {
  storageKey: "admin",
  attendanceHref: "/attendance",
@@ -74,13 +124,7 @@ const panelConfig: ProfessionalDashboardConfig = {
  { label: "Integrations", href: "/integrations", icon: Plug, note: "Connected apps, logs, sync status, and health" },
  ],
  queue: [],
- activity: [
- { title: "Project Created", detail: "Sales workspace was created", time: "2 min ago", icon: FolderKanban },
- { title: "Task Completed", detail: "Dashboard QA checklist was finished", time: "18 min ago", icon: CheckSquare },
- { title: "Employee Added", detail: "New HR profile added to onboarding", time: "42 min ago", icon: UsersRound },
- { title: "Integration Checked", detail: "Workspace integrations health was reviewed", time: "1 hr ago", icon: Plug },
- { title: "Meeting Scheduled", detail: "Finance Automation Demo scheduled", time: "Today", icon: CalendarDays },
- ],
+ activity: [],
  insights: [],
  focus: ["Full admin access", "Role and permission control", "Integration settings", "System settings"],
 };
@@ -93,6 +137,7 @@ export function AdminDashboardPage() {
   const isOwner = userRole === "Owner";
 
   const [liveStats, setLiveStats] = useState<Record<string, { value: string; trend: string }>>({});
+  const [liveActivity, setLiveActivity] = useState<ProfessionalDashboardActivity[]>([]);
   const [moduleAccessState, setModuleAccessState] = useState<ModuleAccess | null>(null);
   const [togglingMode, setTogglingMode] = useState(false);
   const loadSequenceRef = useRef(0);
@@ -100,7 +145,7 @@ export function AdminDashboardPage() {
   const loadDashboard = useCallback(async () => {
     const requestId = loadSequenceRef.current + 1;
     loadSequenceRef.current = requestId;
-    const [accountsResult, integrationsResult, accessResult] = await Promise.all([
+    const [accountsResult, integrationsResult, accessResult, auditResult] = await Promise.all([
       fetchTeamAccounts(),
       (async () => {
         try {
@@ -110,6 +155,13 @@ export function AdminDashboardPage() {
         }
       })(),
       fetchModuleAccess(),
+      (async () => {
+        try {
+          return await fetchAuditLogs({ limit: 5 }, session?.accessToken);
+        } catch {
+          return null;
+        }
+      })(),
     ]);
     if (requestId !== loadSequenceRef.current) return;
 
@@ -125,6 +177,9 @@ export function AdminDashboardPage() {
     setLiveStats(next);
     if (accessResult) {
       setModuleAccessState(accessResult);
+    }
+    if (auditResult) {
+      setLiveActivity(auditResult.items.map(toActivityItem));
     }
   }, [session?.accessToken]);
 
@@ -262,7 +317,7 @@ export function AdminDashboardPage() {
         </div>
       )}
 
-      <ProfessionalDashboard config={{ ...adaptedConfig, stats }} />
+      <ProfessionalDashboard config={{ ...adaptedConfig, stats, activity: liveActivity }} />
     </div>
   );
 }

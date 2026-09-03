@@ -178,6 +178,16 @@ export class UserRepository {
       .lean();
   }
 
+  async findActiveByIdsInOrganization(userIds: string[], organizationId: string) {
+    return UserModel.find({
+      _id: { $in: userIds },
+      organizationId,
+      isActive: true,
+    })
+      .select("_id teamIds organizationId isActive")
+      .lean();
+  }
+
   async findActiveByRoles(roles: string[]) {
     return UserModel.find({ role: { $in: roles }, isActive: true }).select("_id").lean();
   }

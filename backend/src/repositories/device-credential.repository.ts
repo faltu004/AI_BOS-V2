@@ -7,6 +7,8 @@ export type SaveActiveDeviceCredentialInput = {
   tokenHash: string;
   credentialVersion: number;
   issuedAt: Date;
+  organizationId?: string | null;
+  deviceBinding?: string | null;
 };
 
 export type RequestCredentialRotationInput = {
@@ -24,6 +26,17 @@ export type SavePendingCredentialRotationInput = {
   pendingExpiresAt: Date;
 };
 
+export type SaveCredentialRecoveryAuthorizationInput = {
+  deviceId: string;
+  placeholderTokenHash: string;
+  authorizationHash: string;
+  deviceBinding: string;
+  organizationId: string;
+  requestedBy: string;
+  issuedAt: Date;
+  expiresAt: Date;
+};
+
 export class DeviceCredentialRepository {
   async findMetadata(
     deviceId: string,
@@ -35,6 +48,8 @@ export class DeviceCredentialRepository {
       .select(
         [
           "deviceId",
+          "organizationId",
+          "deviceBinding",
           "status",
           "credentialVersion",
           "issuedAt",
@@ -47,6 +62,11 @@ export class DeviceCredentialRepository {
           "pendingCredentialVersion",
           "pendingIssuedAt",
           "pendingExpiresAt",
+          "recoveryDeviceBinding",
+          "recoveryOrganizationId",
+          "recoveryRequestedBy",
+          "recoveryIssuedAt",
+          "recoveryExpiresAt",
         ].join(" "),
       )
       .lean();
@@ -106,6 +126,14 @@ export class DeviceCredentialRepository {
           deviceId:
             input.deviceId,
 
+          organizationId:
+            input.organizationId ??
+            null,
+
+          deviceBinding:
+            input.deviceBinding ??
+            null,
+
           tokenHash:
             input.tokenHash,
 
@@ -141,6 +169,24 @@ export class DeviceCredentialRepository {
             null,
 
           pendingExpiresAt:
+            null,
+
+          recoveryAuthorizationHash:
+            null,
+
+          recoveryDeviceBinding:
+            null,
+
+          recoveryOrganizationId:
+            null,
+
+          recoveryRequestedBy:
+            null,
+
+          recoveryIssuedAt:
+            null,
+
+          recoveryExpiresAt:
             null,
         });
 
@@ -214,6 +260,24 @@ export class DeviceCredentialRepository {
 
             pendingExpiresAt:
               null,
+
+            recoveryAuthorizationHash:
+              null,
+
+            recoveryDeviceBinding:
+              null,
+
+            recoveryOrganizationId:
+              null,
+
+            recoveryRequestedBy:
+              null,
+
+            recoveryIssuedAt:
+              null,
+
+            recoveryExpiresAt:
+              null,
           },
         },
         {
@@ -268,6 +332,194 @@ export class DeviceCredentialRepository {
           },
         },
       );
+  }
+
+  async saveRecoveryAuthorization(
+    input:
+      SaveCredentialRecoveryAuthorizationInput,
+  ) {
+    try {
+      return await DeviceCredentialModel
+        .findOneAndUpdate(
+          {
+            deviceId:
+              input.deviceId,
+            status: "active",
+            $and: [
+              {
+                $or: [
+                  { organizationId: input.organizationId },
+                  { organizationId: null },
+                  { organizationId: { $exists: false } },
+                ],
+              },
+              {
+                $or: [
+                  { deviceBinding: input.deviceBinding },
+                  { deviceBinding: null },
+                  { deviceBinding: { $exists: false } },
+                ],
+              },
+            ],
+          },
+          {
+            $setOnInsert: {
+              deviceId:
+                input.deviceId,
+              tokenHash:
+                input.placeholderTokenHash,
+              status: "active",
+              credentialVersion: 1,
+              issuedAt:
+                input.issuedAt,
+              rotatedAt: null,
+              revokedAt: null,
+              lastUsedAt: null,
+              rotationRequestedAt: null,
+              rotationRequestedBy: null,
+              rotationReason: null,
+              pendingTokenHash: null,
+              pendingCredentialVersion: null,
+              pendingIssuedAt: null,
+              pendingExpiresAt: null,
+            },
+            $set: {
+              organizationId:
+                input.organizationId,
+              deviceBinding:
+                input.deviceBinding,
+              recoveryAuthorizationHash:
+                input.authorizationHash,
+              recoveryDeviceBinding:
+                input.deviceBinding,
+              recoveryOrganizationId:
+                input.organizationId,
+              recoveryRequestedBy:
+                input.requestedBy,
+              recoveryIssuedAt:
+                input.issuedAt,
+              recoveryExpiresAt:
+                input.expiresAt,
+            },
+          },
+          {
+            new: true,
+            upsert: true,
+            runValidators: true,
+            setDefaultsOnInsert: true,
+          },
+        )
+        .select("-tokenHash -pendingTokenHash -recoveryAuthorizationHash")
+        .lean();
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === 11000
+      ) {
+        return null;
+      }
+
+      throw error;
+    }
+  }
+
+  async findForRecovery(
+    deviceId: string,
+  ) {
+    return DeviceCredentialModel
+      .findOne({
+        deviceId,
+      })
+      .select(
+        [
+          "+recoveryAuthorizationHash",
+          "deviceId",
+          "organizationId",
+          "deviceBinding",
+          "status",
+          "credentialVersion",
+          "recoveryDeviceBinding",
+          "recoveryOrganizationId",
+          "recoveryRequestedBy",
+          "recoveryIssuedAt",
+          "recoveryExpiresAt",
+        ].join(" "),
+      )
+      .lean();
+  }
+
+  async promoteRecovery(
+    input: {
+      deviceId: string;
+      authorizationHash: string;
+      previousCredentialVersion: number;
+      tokenHash: string;
+      credentialVersion: number;
+      issuedAt: Date;
+      recoveredAt: Date;
+      deviceBinding: string;
+      organizationId: string;
+    },
+  ) {
+    return DeviceCredentialModel
+      .findOneAndUpdate(
+        {
+          deviceId:
+            input.deviceId,
+          status: "active",
+          credentialVersion:
+            input.previousCredentialVersion,
+          recoveryAuthorizationHash:
+            input.authorizationHash,
+          recoveryDeviceBinding:
+            input.deviceBinding,
+          recoveryOrganizationId:
+            input.organizationId,
+          recoveryExpiresAt: {
+            $gt:
+              input.recoveredAt,
+          },
+        },
+        {
+          $set: {
+            tokenHash:
+              input.tokenHash,
+            organizationId:
+              input.organizationId,
+            deviceBinding:
+              input.deviceBinding,
+            credentialVersion:
+              input.credentialVersion,
+            issuedAt:
+              input.issuedAt,
+            rotatedAt:
+              input.recoveredAt,
+            revokedAt: null,
+            lastUsedAt: null,
+            rotationRequestedAt: null,
+            rotationRequestedBy: null,
+            rotationReason: null,
+            pendingTokenHash: null,
+            pendingCredentialVersion: null,
+            pendingIssuedAt: null,
+            pendingExpiresAt: null,
+            recoveryAuthorizationHash: null,
+            recoveryDeviceBinding: null,
+            recoveryOrganizationId: null,
+            recoveryRequestedBy: null,
+            recoveryIssuedAt: null,
+            recoveryExpiresAt: null,
+          },
+        },
+        {
+          new: true,
+          runValidators: true,
+        },
+      )
+      .select("-tokenHash -pendingTokenHash -recoveryAuthorizationHash")
+      .lean();
   }
   async requestRotation(
     input:

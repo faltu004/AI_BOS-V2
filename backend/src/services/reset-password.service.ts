@@ -4,6 +4,7 @@ import { userRepository } from "../repositories/user.repository.js";
 import { ResetPasswordModel } from "../models/reset-password.model.js";
 import { passwordService } from "./password.service.js";
 import { emailService } from "./email.service.js";
+import { notificationService } from "./notification.service.js";
 import { AppError } from "../utils/app-error.js";
 import { createTokenPair } from "../utils/jwt.js";
 import { securityService } from "./security.service.js";
@@ -57,7 +58,32 @@ export class ResetPasswordService {
       description: "Password reset link generated",
     });
 
+    await this.notifyAdminsOfResetRequest(user);
+
     return { sent: true };
+  }
+
+  /** Lets an Owner/Administrator reset the user's password from the Employees page even if the user never receives the email (e.g. SMTP not configured). */
+  private async notifyAdminsOfResetRequest(user: UserDocument): Promise<void> {
+    try {
+      const admins = await userRepository.findMany({ role: { $in: ["Owner", "Administrator"] }, isActive: true });
+      const recipientUserIds = admins.map((admin) => admin.id).filter((id) => id !== user.id);
+      if (recipientUserIds.length === 0) return;
+
+      await notificationService.dispatch({
+        recipientUserIds,
+        type: "password_reset_requested",
+        category: "system",
+        priority: "High",
+        title: "Password reset requested",
+        body: `${user.fullName} (${user.email}) requested a password reset. Reset it for them from the Employees page if needed.`,
+        actionUrl: "/employees",
+        sourceType: "user",
+        sourceId: user.id,
+      });
+    } catch (error) {
+      logger.error(error, `Failed to notify admins of password reset request for user ${user.id}`);
+    }
   }
 
   async verifyToken(token: string) {

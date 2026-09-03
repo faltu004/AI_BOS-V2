@@ -14,21 +14,18 @@ const testRoot = path.join(
 
 process.env.ProgramData = path.join(testRoot, "ProgramData");
 process.env.PROGRAMDATA = process.env.ProgramData;
+const originalSystemRoot = process.env.SystemRoot;
+process.env.SystemRoot = path.join(testRoot, "MissingWindowsRoot");
 
 /*
  * agent-instance-lock.ts calls ensureProtectedAgentRoot(), which on
  * win32 applies a restrictive icacls ACL (SYSTEM + Administrators
  * only) the first time it runs in a process. In a non-elevated test
  * runner this would lock the test process itself out of the
- * directory it just created. Clearing PATH makes icacls.exe
- * unresolvable, so that step fails and is silently caught (it never
- * rethrows) instead of actually restricting permissions -- the same
- * technique already used by credential-recovery.test.ts for the same
- * underlying issue.
+ * directory it just created. Pointing SystemRoot at a deliberately missing
+ * test path makes the real absolute icacls invocation fail without changing
+ * production ACL behavior.
  */
-const originalPath = process.env.PATH;
-process.env.PATH = "";
-
 /*
  * protectedAgentRoot is computed once, at module load, from
  * process.env.ProgramData. It must therefore be imported only after
@@ -59,7 +56,7 @@ async function resetFiles(): Promise<void> {
 }
 
 test.after(async () => {
-  process.env.PATH = originalPath;
+  process.env.SystemRoot = originalSystemRoot;
   await rm(testRoot, { recursive: true, force: true });
 });
 

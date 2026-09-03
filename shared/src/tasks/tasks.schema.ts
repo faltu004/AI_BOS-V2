@@ -24,7 +24,9 @@ export const taskFormSchema = z.object({
  title: z.string().min(1, "Title is required"),
  description: z.string(),
  issueType: z.enum(["Epic", "Story", "Task", "Subtask", "Bug"]).optional(),
- status: z.enum(["Todo", "In Progress", "Review", "Testing", "Completed"]),
+ status: z.enum(["Todo", "In Progress", "Blocked", "Review", "Testing", "Completed"]),
+ progress: z.number({ message: "Enter a number" }).int().min(0).max(100),
+ blockedReason: z.string().max(1000).optional(),
  priority: z.enum(["Low", "Medium", "High", "Critical"]),
  projectId: z.string().optional(),
  epicId: z.string().optional(),
@@ -48,6 +50,14 @@ export const taskFormSchema = z.object({
  recurring: z.boolean(),
  recurrence: z.string(),
  notifications: z.array(z.string()),
+}).superRefine((value, context) => {
+ if (value.status === "Blocked" && !value.blockedReason?.trim()) {
+ context.addIssue({
+ code: z.ZodIssueCode.custom,
+ path: ["blockedReason"],
+ message: "Blocked reason is required",
+ });
+ }
 });
 
 export type TaskFormValues = z.infer<typeof taskFormSchema>;

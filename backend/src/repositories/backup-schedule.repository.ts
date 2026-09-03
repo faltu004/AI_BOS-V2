@@ -1,5 +1,5 @@
 import { BackupScheduleModel } from "../models/backup-schedule.model.js";
-import type { BackupFrequency, BackupType } from "../constants/backup.js";
+import { backupTypes, type BackupFrequency, type BackupType } from "../constants/backup.js";
 
 export class BackupScheduleRepository {
   async listAll() {
@@ -24,6 +24,20 @@ export class BackupScheduleRepository {
 
   async advance(type: BackupType, nextRunAt: Date, lastRunAt: Date) {
     await BackupScheduleModel.updateOne({ type }, { $set: { nextRunAt, lastRunAt } });
+  }
+
+  /** Inserts a default schedule row for any backup type that doesn't have one yet; never overwrites an existing (possibly user-customized) schedule. */
+  async seedDefaults() {
+    const nextRunAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await Promise.all(
+      backupTypes.map((type) =>
+        BackupScheduleModel.findOneAndUpdate(
+          { type },
+          { $setOnInsert: { type, frequency: "daily", isEnabled: false, retentionDays: 30, nextRunAt } },
+          { upsert: true, setDefaultsOnInsert: true },
+        ),
+      ),
+    );
   }
 }
 

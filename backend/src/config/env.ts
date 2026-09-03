@@ -15,13 +15,14 @@ const envSchema = z.object({
   API_PREFIX: z.string().default("/api/v1"),
   CLIENT_ORIGIN: z
     .string()
-    .default("http://127.0.0.1:8080,http://127.0.0.1:8081,http://127.0.0.1:8082")
+    .default("http://127.0.0.1:8080,http://127.0.0.1:8081")
     .transform((value) =>
       value
         .split(",")
         .map((origin) => origin.trim())
         .filter(Boolean),
     ),
+  ALLOW_TUNNEL_ORIGINS: z.coerce.boolean().default(false),
   COOKIE_DOMAIN: z.string().optional(),
   MONGODB_URI: z.string().min(1, "MONGODB_URI is required"),
   JWT_ACCESS_SECRET: z.string().min(16, "JWT_ACCESS_SECRET must be at least 16 characters"),
@@ -68,6 +69,7 @@ const envSchema = z.object({
   ATTENDANCE_OFFICE_LAT: z.coerce.number().min(-90).max(90).default(12.9716),
   ATTENDANCE_OFFICE_LNG: z.coerce.number().min(-180).max(180).default(77.5946),
   ATTENDANCE_RADIUS_METERS: z.coerce.number().int().positive().default(300),
+  EMPLOYEE_UPDATE_FEED_DIR: z.string().default("employee-update-feed"),
   LOG_DIR: z.string().default("logs"),
   LOG_MAX_FILE_SIZE_MB: z.coerce.number().int().positive().default(20),
   LOG_MAX_FILES: z.coerce.number().int().positive().default(10),

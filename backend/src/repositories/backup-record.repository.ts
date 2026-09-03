@@ -29,6 +29,14 @@ export class BackupRecordRepository {
   async listHistory(limit = 50) {
     return BackupRecordModel.find({}).sort({ createdAt: -1 }).limit(limit).lean();
   }
+
+  async findExpiredCompleted(type: BackupType, olderThan: Date) {
+    return BackupRecordModel.find({ type, status: "completed", completedAt: { $lt: olderThan } }).lean();
+  }
+
+  async deleteById(id: string) {
+    return BackupRecordModel.findByIdAndDelete(id);
+  }
 }
 
 export const backupRecordRepository = new BackupRecordRepository();

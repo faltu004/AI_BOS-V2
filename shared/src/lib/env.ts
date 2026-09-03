@@ -9,6 +9,15 @@ declare global {
     __AI_BOS_CONFIG__?: RuntimeConfig;
     electronAPI?: {
       config?: RuntimeConfig;
+      ensureDeviceEnrollment?: (
+        accessToken: string,
+        active?: boolean,
+      ) => Promise<{
+        state:
+          | "enrolled"
+          | "bootstrap_pending"
+          | "recovery_pending";
+      }>;
     };
   }
 }
@@ -105,6 +114,13 @@ export function getApiBaseUrl(): string {
     // If running on Vite dev port (8080, 8081), point to backend port 5000 on the same host
     if (port === "8080" || port === "8081" || port === "3000") {
       return `${protocol}//${hostname}:5000/api/v1`;
+    }
+
+    // Cloudflare Tunnel: app-<domain> / admin-<domain> each map to api-<domain> (see
+    // CLOUDFLARE_TUNNEL_SETUP.md's ingress rules — the API has its own subdomain, not a port).
+    const tunnelMatch = /^(app|admin)-(.+)$/.exec(hostname);
+    if (tunnelMatch) {
+      return `${protocol}//api-${tunnelMatch[2]}/api/v1`;
     }
   }
 

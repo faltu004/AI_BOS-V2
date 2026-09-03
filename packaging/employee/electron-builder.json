@@ -19,6 +19,12 @@
     "extraMetadata":  {
                           "main":  "electron/employee-main.cjs"
                       },
+    "publish":  [
+                    {
+                        "provider":  "generic",
+                        "url":  "https://ADMIN-WORKNAI:5443/updates/employee/"
+                    }
+                ],
     "extraResources":  [
                            {
                                "from":  "packaging/runtime-config/employee-aibos-config.json",
@@ -116,6 +122,9 @@
                  "perMachine":  true,
                  "installerIcon":  "packaging/assets/icons/AI-BOS-Employee.ico",
                  "uninstallerIcon":  "packaging/assets/icons/AI-BOS-Employee.ico",
+                 "installerHeader":  "packaging/assets/installer/employee-header.bmp",
+                 "installerSidebar":  "packaging/assets/installer/employee-sidebar.bmp",
+                 "uninstallerSidebar":  "packaging/assets/installer/employee-sidebar.bmp",
                  "shortcutName":  "AI BOS Employee"
              }
 }

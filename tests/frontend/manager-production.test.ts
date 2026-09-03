@@ -110,7 +110,7 @@ test("Manager employees use live user, department, attendance, leave, and holida
  for (const endpoint of [/\/users/, /\/organization\/departments/, /\/attendance\/summary/, /\/organization\/holidays/]) {
  assert.match(apiSource, endpoint);
  }
- assert.match(wrapperSource, /role !== "Manager"/);
+ assert.match(wrapperSource, /hasPermission\("department\.create"\)/);
  assert.doesNotMatch(pageSource, /employees\.data|seedEmployees|Priya Sharma|Nexora/i);
 });
 

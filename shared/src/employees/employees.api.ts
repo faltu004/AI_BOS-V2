@@ -344,6 +344,20 @@ export async function createEmployee(input: EmployeeFormInput, departmentId?: st
  return employee;
 }
 
+export async function resetEmployeePassword(id: string): Promise<{ temporaryPassword: string }> {
+ const response = await fetchWithSession(`${getApiBaseUrl()}/users/${id}/reset-password`, {
+ method: "POST",
+ cache: "no-store",
+ });
+
+ const json = await response.json().catch(() => null);
+ if (!response.ok) {
+ throw new Error(json?.message ?? "Unable to reset this employee's password.");
+ }
+
+ return json.data as { temporaryPassword: string };
+}
+
 export async function deleteEmployee(id: string): Promise<void> {
  const response = await fetchWithSession(`${getApiBaseUrl()}/users/${id}`, {
  method: "DELETE",

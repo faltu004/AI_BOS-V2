@@ -69,6 +69,22 @@ test("Device Details uses real application, command, policy, and current remote-
   assert.equal(remote.includes("Employee session unavailable"), true);
 });
 
+test("Device Details keeps AI BOS authenticated user separate from Windows session telemetry", async () => {
+  const [main, authService, managedService, details] = await Promise.all([
+    source("electron/employee-main.cjs"),
+    source("shared/src/auth/auth-service.ts"),
+    source("backend/src/services/managed-device.service.ts"),
+    source("admin/src/admin/features/monitoring/DeviceDetailsPage.tsx"),
+  ]);
+
+  assert.equal(main.includes("/devices/authenticated-user"), true);
+  assert.equal(main.includes("deviceBinding,\n        active"), true);
+  assert.equal(authService.includes("session.accessToken,\n false,"), true);
+  assert.equal(managedService.includes("user.fullName.trim()"), true);
+  assert.equal(details.includes('device.username ||\n                      "Not signed in"'), true);
+  assert.equal(details.includes("device.currentUser ||"), true);
+});
+
 test("active Device Details production sources contain no random or fake data fallbacks", async () => {
   const files = [
     "admin/src/admin/features/monitoring/DeviceDetailsPage.tsx",

@@ -120,11 +120,13 @@ test("AI HTTP routes deny Manager, report disabled provider, and reject blocked 
   const { createTokenPair } = await import("../../backend/src/utils/jwt.ts");
   const { userRepository } = await import("../../backend/src/repositories/user.repository.ts");
   const { administratorMonitoringAccessService } = await import("../../backend/src/services/administrator-monitoring-access.service.ts");
+  const { organizationSettingsRepository } = await import("../../backend/src/repositories/organization-settings.repository.ts");
   const { AppError } = await import("../../backend/src/utils/app-error.ts");
 
   const originalFindById = userRepository.findById;
   const originalHasPermission = administratorMonitoringAccessService.hasPermission;
   const originalRequirePermission = administratorMonitoringAccessService.requirePermission;
+  const originalFindGlobal = organizationSettingsRepository.findGlobal;
   let monitoringAllowed = true;
 
   userRepository.findById = (async (id: string) => ({
@@ -137,6 +139,8 @@ test("AI HTTP routes deny Manager, report disabled provider, and reject blocked 
   administratorMonitoringAccessService.requirePermission = (async () => {
     if (!monitoringAllowed) throw new AppError("Monitoring permission is required", 403);
   }) as any;
+  // No live MongoDB in this test — the global Master Control Switch check must not buffer against it.
+  organizationSettingsRepository.findGlobal = (async () => null) as any;
 
   const server = createServer(createApp());
   try {
@@ -196,6 +200,7 @@ test("AI HTTP routes deny Manager, report disabled provider, and reject blocked 
     userRepository.findById = originalFindById;
     administratorMonitoringAccessService.hasPermission = originalHasPermission;
     administratorMonitoringAccessService.requirePermission = originalRequirePermission;
+    organizationSettingsRepository.findGlobal = originalFindGlobal;
   }
 });
 

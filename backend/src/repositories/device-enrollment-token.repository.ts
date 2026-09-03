@@ -5,6 +5,8 @@ import {
 export type CreateDeviceEnrollmentTokenInput = {
   tokenHash: string;
   createdBy: string;
+  organizationId?: string;
+  deviceBinding?: string;
   createdAt: Date;
   expiresAt: Date;
 };
@@ -23,6 +25,12 @@ export class DeviceEnrollmentTokenRepository {
           createdBy:
             input.createdBy,
 
+          organizationId:
+            input.organizationId,
+
+          deviceBinding:
+            input.deviceBinding,
+
           createdAt:
             input.createdAt,
 
@@ -39,6 +47,12 @@ export class DeviceEnrollmentTokenRepository {
 
       createdBy:
         created.createdBy,
+
+      organizationId:
+        created.organizationId,
+
+      deviceBinding:
+        created.deviceBinding,
 
       createdAt:
         created.createdAt,
@@ -68,6 +82,8 @@ export class DeviceEnrollmentTokenRepository {
       .select(
         [
           "createdBy",
+          "organizationId",
+          "deviceBinding",
           "createdAt",
           "expiresAt",
           "consumedAt",
@@ -79,6 +95,7 @@ export class DeviceEnrollmentTokenRepository {
   async consumeByHash(
     tokenHash: string,
     consumedAt: Date,
+    deviceBinding?: string,
   ) {
     return DeviceEnrollmentTokenModel
       .findOneAndUpdate(
@@ -90,6 +107,20 @@ export class DeviceEnrollmentTokenRepository {
             $gt:
               consumedAt,
           },
+          ...(deviceBinding
+            ? {
+                $or: [
+                  { deviceBinding },
+                  { deviceBinding: { $exists: false } },
+                  { deviceBinding: null },
+                ],
+              }
+            : {
+                $or: [
+                  { deviceBinding: { $exists: false } },
+                  { deviceBinding: null },
+                ],
+              }),
         },
         {
           $set: {
@@ -104,6 +135,8 @@ export class DeviceEnrollmentTokenRepository {
       .select(
         [
           "createdBy",
+          "organizationId",
+          "deviceBinding",
           "createdAt",
           "expiresAt",
           "consumedAt",

@@ -15,8 +15,14 @@ import {
 const DEVICE_TOKEN_PREFIX =
   "aibos_device_";
 
+const RECOVERY_AUTHORIZATION_PREFIX =
+  "aibos_recover_ot_";
+
 const PENDING_ROTATION_TTL_MS =
   10 * 60 * 1000;
+
+const RECOVERY_AUTHORIZATION_TTL_MS =
+  5 * 60 * 1000;
 
 function normalizeDeviceId(
   deviceId: string,
@@ -48,6 +54,15 @@ function createDeviceToken():
   );
 }
 
+function createRecoveryAuthorization():
+  string {
+  return (
+    RECOVERY_AUTHORIZATION_PREFIX +
+    randomBytes(32)
+      .toString("base64url")
+  );
+}
+
 function hashDeviceToken(
   deviceToken: string,
 ): string {
@@ -57,6 +72,57 @@ function hashDeviceToken(
       "utf8",
     )
     .digest("hex");
+}
+
+function normalizeDeviceBinding(
+  value: string,
+): string {
+  const normalized =
+    value.trim().toLowerCase();
+
+  if (!/^[a-f0-9]{64}$/.test(normalized)) {
+    throw new AppError(
+      "Device binding is invalid",
+      400,
+    );
+  }
+
+  return normalized;
+}
+
+function deriveDeviceIdentity(
+  fingerprint: string,
+) {
+  const normalizedFingerprint =
+    fingerprint.trim();
+
+  if (!normalizedFingerprint) {
+    throw new AppError(
+      "Device fingerprint is required",
+      400,
+    );
+  }
+
+  const deviceIdHash =
+    createHash("sha256")
+      .update(normalizedFingerprint)
+      .digest("hex")
+      .slice(0, 12)
+      .toUpperCase();
+
+  const deviceBinding =
+    createHash("sha256")
+      .update(
+        `ai-bos-device-binding-v1:${normalizedFingerprint}`,
+        "utf8",
+      )
+      .digest("hex");
+
+  return {
+    deviceId:
+      `DEV-${deviceIdHash}`,
+    deviceBinding,
+  };
 }
 
 function hashesMatch(
@@ -187,9 +253,19 @@ export type DeviceCredentialStatusView = {
     null;
 };
 
+export type IssuedDeviceRecoveryAuthorization = {
+  deviceId: string;
+  recoveryAuthorization: string;
+  expiresAt: Date;
+};
+
 export class DeviceCredentialService {
   async issueInitialForDevice(
     deviceId: string,
+    context?: {
+      organizationId?: string;
+      deviceBinding?: string;
+    },
   ): Promise<IssuedDeviceCredential | null> {
     const normalizedDeviceId =
       normalizeDeviceId(
@@ -228,6 +304,18 @@ export class DeviceCredentialService {
           credentialVersion: 1,
 
           issuedAt,
+
+          organizationId:
+            context?.organizationId
+              ?.trim() ||
+            null,
+
+          deviceBinding:
+            context?.deviceBinding
+              ? normalizeDeviceBinding(
+                  context.deviceBinding,
+                )
+              : null,
         });
     } catch (error) {
       if (
@@ -373,6 +461,235 @@ export class DeviceCredentialService {
       );
 
     return true;
+  }
+
+  async requestRecoveryAuthorization(
+    input: {
+      deviceId: string;
+      deviceBinding: string;
+      organizationId: string;
+      requestedBy: string;
+    },
+  ): Promise<IssuedDeviceRecoveryAuthorization> {
+    const deviceId =
+      normalizeDeviceId(input.deviceId);
+    const deviceBinding =
+      normalizeDeviceBinding(input.deviceBinding);
+    const organizationId =
+      input.organizationId.trim();
+    const requestedBy =
+      input.requestedBy.trim();
+
+    if (!organizationId || !requestedBy) {
+      throw new AppError(
+        "Authenticated organization membership is required",
+        403,
+      );
+    }
+
+    const existing =
+      await deviceCredentialRepository
+        .findMetadata(deviceId);
+
+    if (
+      existing &&
+      existing.status !== "active"
+    ) {
+      throw new AppError(
+        "Device credential is unavailable",
+        409,
+      );
+    }
+
+    if (
+      existing?.organizationId &&
+      existing.organizationId !== organizationId
+    ) {
+      throw new AppError(
+        "Device belongs to another organization",
+        403,
+      );
+    }
+
+    if (
+      existing?.deviceBinding &&
+      existing.deviceBinding !== deviceBinding
+    ) {
+      throw new AppError(
+        "Device binding mismatch",
+        403,
+      );
+    }
+
+    const recoveryAuthorization =
+      createRecoveryAuthorization();
+    const issuedAt = new Date();
+    const expiresAt = new Date(
+      issuedAt.getTime() +
+        RECOVERY_AUTHORIZATION_TTL_MS,
+    );
+
+    const saved =
+      await deviceCredentialRepository
+        .saveRecoveryAuthorization({
+          deviceId,
+          placeholderTokenHash:
+            hashDeviceToken(
+              createDeviceToken(),
+            ),
+          authorizationHash:
+            hashDeviceToken(
+              recoveryAuthorization,
+            ),
+          deviceBinding,
+          organizationId,
+          requestedBy,
+          issuedAt,
+          expiresAt,
+        });
+
+    if (!saved) {
+      throw new AppError(
+        "Device recovery authorization could not be issued",
+        409,
+      );
+    }
+
+    return {
+      deviceId,
+      recoveryAuthorization,
+      expiresAt,
+    };
+  }
+
+  async recoverWithAuthorization(
+    input: {
+      deviceId: string;
+      deviceBinding: string;
+      fingerprint: string;
+      recoveryAuthorization: string;
+    },
+  ) {
+    const deviceId =
+      normalizeDeviceId(input.deviceId);
+    const deviceBinding =
+      normalizeDeviceBinding(input.deviceBinding);
+    const recoveryAuthorization =
+      input.recoveryAuthorization.trim();
+
+    if (
+      !recoveryAuthorization.startsWith(
+        RECOVERY_AUTHORIZATION_PREFIX,
+      )
+    ) {
+      throw new AppError(
+        "Invalid device recovery authorization",
+        401,
+      );
+    }
+
+    const derived =
+      deriveDeviceIdentity(input.fingerprint);
+
+    if (
+      derived.deviceId !== deviceId ||
+      derived.deviceBinding !== deviceBinding
+    ) {
+      throw new AppError(
+        "Device recovery binding mismatch",
+        403,
+      );
+    }
+
+    const credential =
+      await deviceCredentialRepository
+        .findForRecovery(deviceId);
+    const authorizationHash =
+      hashDeviceToken(recoveryAuthorization);
+    const now = new Date();
+
+    if (
+      !credential ||
+      credential.status !== "active" ||
+      !credential.recoveryAuthorizationHash ||
+      !hashesMatch(
+        credential.recoveryAuthorizationHash,
+        authorizationHash,
+      ) ||
+      credential.recoveryDeviceBinding !== deviceBinding ||
+      !credential.recoveryOrganizationId ||
+      !credential.recoveryRequestedBy ||
+      !credential.recoveryExpiresAt ||
+      credential.recoveryExpiresAt.getTime() <= now.getTime()
+    ) {
+      throw new AppError(
+        "Invalid or expired device recovery authorization",
+        401,
+      );
+    }
+
+    if (
+      credential.organizationId &&
+      credential.organizationId !==
+        credential.recoveryOrganizationId
+    ) {
+      throw new AppError(
+        "Device recovery organization mismatch",
+        403,
+      );
+    }
+
+    if (
+      credential.deviceBinding &&
+      credential.deviceBinding !== deviceBinding
+    ) {
+      throw new AppError(
+        "Device recovery binding mismatch",
+        403,
+      );
+    }
+
+    const deviceToken =
+      createDeviceToken();
+    const issuedAt = now;
+    const credentialVersion =
+      credential.credentialVersion + 1;
+    const organizationId =
+      credential.recoveryOrganizationId;
+    const requestedBy =
+      credential.recoveryRequestedBy;
+
+    const promoted =
+      await deviceCredentialRepository
+        .promoteRecovery({
+          deviceId,
+          authorizationHash,
+          previousCredentialVersion:
+            credential.credentialVersion,
+          tokenHash:
+            hashDeviceToken(deviceToken),
+          credentialVersion,
+          issuedAt,
+          recoveredAt: now,
+          deviceBinding,
+          organizationId,
+        });
+
+    if (!promoted) {
+      throw new AppError(
+        "Device recovery authorization was already used",
+        409,
+      );
+    }
+
+    return {
+      deviceId,
+      deviceToken,
+      credentialVersion,
+      issuedAt,
+      organizationId,
+      requestedBy,
+    };
   }
 
   async requestRotation(

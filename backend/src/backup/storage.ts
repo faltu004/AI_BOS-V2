@@ -7,6 +7,7 @@ const backupsDir = path.join(process.cwd(), "backups");
 export type BackupStorage = {
   save(key: string, buffer: Buffer): Promise<{ filePath: string; fileSize: number; checksum: string }>;
   load(filePath: string): Promise<Buffer>;
+  remove(filePath: string): Promise<void>;
 };
 
 /**
@@ -25,5 +26,15 @@ export const localBackupStorage: BackupStorage = {
 
   async load(filePath) {
     return fs.readFile(filePath);
+  },
+
+  async remove(filePath) {
+    try {
+      await fs.unlink(filePath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        throw error;
+      }
+    }
   },
 };

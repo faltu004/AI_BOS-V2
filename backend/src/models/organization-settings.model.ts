@@ -17,9 +17,14 @@ export type WorkspacePreferences = {
   defaultLeavePolicyNote?: string;
 };
 
+export const administratorControlModes = ["full_control", "read_only"] as const;
+export type AdministratorControlMode = (typeof administratorControlModes)[number];
+
 export type ModuleAccess = {
   /** Owner-only kill switch — when false, the Administrator role's Admin Panel is blocked in the admin portal. */
   adminPanelEnabled: boolean;
+  /** Owner-only write lock — when "read_only", Administrator-originated mutating requests are rejected server-side. */
+  administratorControlMode: AdministratorControlMode;
 };
 
 export type OrganizationSettings = {
@@ -112,6 +117,7 @@ const organizationSettingsSchema = new Schema<OrganizationSettings>(
     },
     moduleAccess: {
       adminPanelEnabled: { type: Boolean, default: true },
+      administratorControlMode: { type: String, enum: administratorControlModes, default: "full_control" },
     },
     updatedBy: {
       type: String,

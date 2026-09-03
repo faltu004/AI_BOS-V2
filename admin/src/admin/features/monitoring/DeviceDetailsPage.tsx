@@ -566,7 +566,7 @@ export function DeviceDetailsPage() {
 
                   <span className="font-medium">
                     {device.username ||
-                      "—"}
+                      "Not signed in"}
                   </span>
                 </div>
 
@@ -782,7 +782,6 @@ export function DeviceDetailsPage() {
     </div>
   );
 }
-
 
 
 

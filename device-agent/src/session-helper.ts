@@ -42,6 +42,10 @@ import {
 import {
   createLocalAgentApplicationClient,
 } from "./local-agent-application-client.js";
+import {
+  acquireSessionHelperInstanceLock,
+  type SessionHelperInstanceLock,
+} from "./session-helper-instance-lock.js";
 
 type StopHandler =
   () =>
@@ -60,6 +64,11 @@ let shuttingDown =
 
 let retryTimer:
   ReturnType<typeof setTimeout> |
+  null =
+    null;
+
+let instanceLock:
+  SessionHelperInstanceLock |
   null =
     null;
 
@@ -110,6 +119,11 @@ async function shutdown(
   }
 
   await stopComponents();
+
+  if (instanceLock) {
+    await instanceLock.release();
+    instanceLock = null;
+  }
 
   console.log(
     "[Session Helper] Shutdown complete.",
@@ -407,4 +421,25 @@ process.once(
   },
 );
 
-void start();
+async function launch(): Promise<void> {
+  const lock =
+    await acquireSessionHelperInstanceLock();
+
+  if (!lock) {
+    console.log(
+      "[Session Helper] Another instance is already running; exiting without starting duplicate reporters.",
+    );
+    return;
+  }
+
+  instanceLock = lock;
+  await start();
+}
+
+void launch().catch((error) => {
+  console.error(
+    "[Session Helper] Launch failed:",
+    error,
+  );
+  process.exitCode = 1;
+});

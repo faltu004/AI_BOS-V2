@@ -1,4 +1,4 @@
-export const taskStatuses = ["Todo", "In Progress", "Review", "Testing", "Completed"] as const;
+export const taskStatuses = ["Todo", "In Progress", "Blocked", "Review", "Testing", "Completed"] as const;
 
 export const taskPriorities = ["Low", "Medium", "High", "Critical"] as const;
 

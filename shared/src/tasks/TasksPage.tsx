@@ -27,6 +27,7 @@ import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Link } from "react-router-dom";
 import { ThemeToggle } from "@shared/ui/ThemeToggle";
+import { usePermissions } from "@shared/auth/usePermissions";
 import { Button } from "@shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@shared/ui/card";
 import { useConfirm } from "@shared/ui/confirm-dialog-context";
@@ -59,6 +60,8 @@ const emptyForm: TaskFormInput = {
  description: "",
  issueType: "Task",
  status: "Todo",
+ progress: 0,
+ blockedReason: "",
  priority: "Medium",
  labels: [],
  assignee: "",
@@ -198,6 +201,8 @@ function TaskFormModal({
  description: initialTask.description,
  issueType: initialTask.issueType ?? "Task",
  status: initialTask.status,
+ progress: initialTask.progress,
+ blockedReason: initialTask.blockedReason ?? "",
  priority: initialTask.priority,
  projectId: initialTask.projectId,
  epicId: initialTask.epicId,
@@ -232,6 +237,7 @@ function TaskFormModal({
  });
 
  const selectedProjectId = watch("projectId");
+ const selectedStatus = watch("status");
  const selectedProject = projects.find((project) => project.id === selectedProjectId);
  const parentOptions = tasks.filter((task) => task.id !== initialTask?.id && (task.issueType ?? "Task") !== "Subtask");
 
@@ -261,6 +267,21 @@ function TaskFormModal({
  ))}
  </select>
  </div>
+ <div className="space-y-2">
+ <Label htmlFor="progress">Progress</Label>
+ <Input id="progress" max={100} min={0} type="number" {...register("progress", { valueAsNumber: true })} />
+ </div>
+ {selectedStatus === "Blocked" && (
+ <div className="space-y-2 md:col-span-2">
+ <Label htmlFor="blockedReason">Blocked reason</Label>
+ <textarea
+ className="min-h-20 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+ id="blockedReason"
+ {...register("blockedReason")}
+ />
+ {errors.blockedReason && <p className="text-xs font-medium text-destructive">{errors.blockedReason.message}</p>}
+ </div>
+ )}
  <div className="space-y-2">
  <Label>Priority</Label>
  <select className="h-11 w-full rounded-md border bg-background px-3 text-sm" {...register("priority")}>
@@ -484,11 +505,11 @@ function TaskCard({
 }: {
  projects: ProjectSummary[];
  task: Task;
- onDelete: () => void;
- onEdit: () => void;
- onLogTime: () => void;
+ onDelete?: () => void;
+ onEdit?: () => void;
+ onLogTime?: () => void;
  onOpen: () => void;
- onToggleChecklist: (itemId: string) => void;
+ onToggleChecklist?: (itemId: string) => void;
  onDragStart?: () => void;
 }) {
  const completion = getTaskCompletion(task);
@@ -555,8 +576,8 @@ function TaskCard({
  <div className="mt-4 space-y-3">
  <div>
  <div className="mb-2 flex justify-between text-xs">
- <span className="text-muted-foreground">Checklist</span>
- <span className="font-semibold">{completion}%</span>
+ <span className="text-muted-foreground">Progress</span>
+ <span className="font-semibold">{completion}% · {100 - completion}% remaining</span>
  </div>
  <div className="h-2 overflow-hidden rounded-full bg-muted">
  <div className="h-full rounded-full bg-primary" style={{ width: `${completion}%` }} />
@@ -581,7 +602,8 @@ function TaskCard({
  <input
  checked={item.done}
  className="h-3.5 w-3.5 accent-primary"
- onChange={() => onToggleChecklist(item.id)}
+ disabled={!onToggleChecklist}
+ onChange={() => onToggleChecklist?.(item.id)}
  type="checkbox"
  />
  <span className={cn(item.done && "line-through")}>{item.title}</span>
@@ -590,21 +612,21 @@ function TaskCard({
  </div>
  )}
  <div className="mt-4 flex flex-wrap gap-2">
- <Button onClick={onEdit} size="sm" type="button" variant="outline">
+ {onEdit && <Button onClick={onEdit} size="sm" type="button" variant="outline">
  <Edit3 className="h-4 w-4" />
  Edit
- </Button>
+ </Button>}
  <Button onClick={onOpen} size="sm" type="button" variant="outline">
  <PanelRightOpen className="h-4 w-4" />
  Open
  </Button>
- <Button onClick={onLogTime} size="sm" type="button" variant="outline">
+ {onLogTime && <Button onClick={onLogTime} size="sm" type="button" variant="outline">
  <Timer className="h-4 w-4" />
  Log 1h
- </Button>
- <Button onClick={onDelete} size="sm" type="button" variant="outline">
+ </Button>}
+ {onDelete && <Button onClick={onDelete} size="sm" type="button" variant="outline">
  <Trash2 className="h-4 w-4" />
- </Button>
+ </Button>}
  </div>
  </motion.article>
  );
@@ -613,6 +635,7 @@ function TaskCard({
 function BacklogView({
  activeProject,
  backlogTasks,
+ canManage,
  onCloseSprint,
  onCreateSprint,
  onMoveToBacklog,
@@ -626,6 +649,7 @@ function BacklogView({
 }: {
  activeProject?: ProjectSummary;
  backlogTasks: Task[];
+ canManage: boolean;
  onCloseSprint: (sprint: ProjectSprint) => void;
  onCreateSprint: () => void;
  onMoveToBacklog: (task: Task) => void;
@@ -646,10 +670,10 @@ function BacklogView({
  <CardTitle className="text-base">Backlog</CardTitle>
  <p className="mt-1 text-xs text-muted-foreground">{backlogTasks.length} unplanned issues</p>
  </div>
- <Button disabled={!activeProject} onClick={onCreateSprint} size="sm" type="button">
+ {canManage && <Button disabled={!activeProject} onClick={onCreateSprint} size="sm" type="button">
  <Plus className="h-4 w-4" />
  Sprint
- </Button>
+ </Button>}
  </div>
  </CardHeader>
  <CardContent className="space-y-2 p-4 pt-0">
@@ -665,7 +689,7 @@ function BacklogView({
  {task.taskCode} - {task.issueType ?? "Task"} - {getEpicTitle([activeProject].filter(Boolean) as ProjectSummary[], task.epicId)}
  </p>
  </button>
- <select
+ {canManage && <select
  className="h-9 rounded-md border bg-background px-2 text-xs"
  onChange={(event) => event.target.value && onMoveToSprint(task, event.target.value)}
  value=""
@@ -679,6 +703,7 @@ function BacklogView({
  </option>
  ))}
  </select>
+ }
  </div>
  ))
  )}
@@ -714,7 +739,7 @@ function BacklogView({
  <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", sprintStatusClass(sprint.status))}>{sprint.status}</span>
  </div>
  {sprint.goal && <p className="mt-2 text-xs text-muted-foreground">{sprint.goal}</p>}
- <div className="mt-3 flex flex-wrap gap-2">
+ {canManage && <div className="mt-3 flex flex-wrap gap-2">
  <Button disabled={sprint.status !== "Planned"} onClick={() => onStartSprint(sprint)} size="sm" type="button" variant="outline">
  <PlayCircle className="h-4 w-4" />
  Start
@@ -723,6 +748,7 @@ function BacklogView({
  Close
  </Button>
  </div>
+ }
  </div>
  ))}
  <div className="space-y-2">
@@ -736,9 +762,9 @@ function BacklogView({
  <p className="text-sm font-semibold">{task.title}</p>
  <p className="mt-1 text-xs text-muted-foreground">{task.taskCode} - {task.status}</p>
  </button>
- <Button className="mt-2" onClick={() => onMoveToBacklog(task)} size="sm" type="button" variant="outline">
+ {canManage && <Button className="mt-2" onClick={() => onMoveToBacklog(task)} size="sm" type="button" variant="outline">
  Move to backlog
- </Button>
+ </Button>}
  </div>
  ))
  )}
@@ -805,23 +831,43 @@ function HierarchyView({ projects, tasks, onOpenTask }: { projects: ProjectSumma
 }
 
 function TaskDetailDrawer({
+ canLogTime,
+ canManageTask,
+ canUpdateWork,
  onClose,
  onEdit,
  onLogTime,
  onMoveToBacklog,
  onMoveToSprint,
+ onToggleChecklist,
+ onWorkUpdate,
  projects,
  task,
 }: {
+ canLogTime: boolean;
+ canManageTask: boolean;
+ canUpdateWork: boolean;
  onClose: () => void;
  onEdit: () => void;
  onLogTime: () => void;
  onMoveToBacklog: () => void;
  onMoveToSprint: (sprintId: string) => void;
+ onToggleChecklist: (itemId: string) => void;
+ onWorkUpdate: (input: Record<string, unknown>) => void;
  projects: ProjectSummary[];
  task: Task;
 }) {
  const project = projects.find((item) => item.id === task.projectId);
+ const completion = getTaskCompletion(task);
+ const [workStatus, setWorkStatus] = useState<TaskStatus>(task.status);
+ const [workProgress, setWorkProgress] = useState(task.progress);
+ const [blockedReason, setBlockedReason] = useState(task.blockedReason ?? "");
+
+ useEffect(() => {
+ setWorkStatus(task.status);
+ setWorkProgress(task.progress);
+ setBlockedReason(task.blockedReason ?? "");
+ }, [task.blockedReason, task.id, task.progress, task.status]);
 
  return (
  <div className="fixed inset-0 z-50 flex justify-end bg-foreground/30 p-3">
@@ -840,6 +886,75 @@ function TaskDetailDrawer({
  <span className="rounded-full border bg-background px-2.5 py-1 text-xs font-semibold text-muted-foreground">{task.issueType ?? "Task"}</span>
  </div>
  <p className="text-sm leading-6 text-muted-foreground">{task.description || "No description."}</p>
+ <div className="rounded-md border bg-card p-4">
+ <div className="flex items-center justify-between gap-3">
+ <p className="text-sm font-semibold">Work progress</p>
+ <span className="text-xs font-semibold text-muted-foreground">{task.remaining}% remaining</span>
+ </div>
+ <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+ <div className="h-full rounded-full bg-primary" style={{ width: `${completion}%` }} />
+ </div>
+ <p className="mt-2 text-xs text-muted-foreground">Completed: {completion}% · Remaining: {100 - completion}%</p>
+ {canUpdateWork && (
+ <div className="mt-4 grid gap-3 sm:grid-cols-2">
+ <div className="space-y-2">
+ <Label htmlFor="task-work-status">Status</Label>
+ <select
+ className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+ id="task-work-status"
+ onChange={(event) => setWorkStatus(event.target.value as TaskStatus)}
+ value={workStatus}
+ >
+ {taskStatuses.map((item) => <option key={item}>{item}</option>)}
+ </select>
+ </div>
+ <div className="space-y-2">
+ <Label htmlFor="task-work-progress">Progress (%)</Label>
+ <Input
+ disabled={task.checklist.length > 0}
+ id="task-work-progress"
+ max={100}
+ min={0}
+ onChange={(event) => setWorkProgress(Math.max(0, Math.min(100, Number(event.target.value))))}
+ type="number"
+ value={workProgress}
+ />
+ {task.checklist.length > 0 && (
+ <p className="text-xs text-muted-foreground">Calculated from checklist completion.</p>
+ )}
+ </div>
+ {workStatus === "Blocked" && (
+ <div className="space-y-2 sm:col-span-2">
+ <Label htmlFor="task-blocked-reason">Blocked reason</Label>
+ <textarea
+ className="min-h-20 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+ id="task-blocked-reason"
+ onChange={(event) => setBlockedReason(event.target.value)}
+ value={blockedReason}
+ />
+ </div>
+ )}
+ <div className="sm:col-span-2">
+ <Button
+ disabled={workStatus === "Blocked" && !blockedReason.trim()}
+ onClick={() => onWorkUpdate({
+ status: workStatus,
+ progress: workProgress,
+ blockedReason: workStatus === "Blocked" ? blockedReason.trim() : null,
+ })}
+ type="button"
+ >
+ Save work update
+ </Button>
+ </div>
+ </div>
+ )}
+ {task.status === "Blocked" && task.blockedReason && (
+ <p className="mt-3 rounded-md bg-rose-500/10 p-3 text-sm text-rose-700 dark:text-rose-300">
+ Blocked: {task.blockedReason}
+ </p>
+ )}
+ </div>
  <div className="grid gap-3 sm:grid-cols-2">
  {[
  ["Project", getProjectName(projects, task.projectId), Layers3],
@@ -874,7 +989,13 @@ function TaskDetailDrawer({
  ) : (
  task.checklist.map((item) => (
  <div className="flex items-center gap-2 text-sm" key={item.id}>
- <input checked={item.done} readOnly className="h-4 w-4 accent-primary" type="checkbox" />
+ <input
+ checked={item.done}
+ className="h-4 w-4 accent-primary"
+ disabled={!canUpdateWork}
+ onChange={() => onToggleChecklist(item.id)}
+ type="checkbox"
+ />
  <span className={cn(item.done && "line-through text-muted-foreground")}>{item.title}</span>
  </div>
  ))
@@ -883,15 +1004,15 @@ function TaskDetailDrawer({
  </div>
  <TaskCommentsPanel taskId={task.id} />
  <div className="flex flex-wrap gap-2">
- <Button onClick={onEdit} type="button">
+ {canManageTask && <Button onClick={onEdit} type="button">
  <Edit3 className="h-4 w-4" />
  Edit
- </Button>
- <Button onClick={onLogTime} type="button" variant="outline">
+ </Button>}
+ {canLogTime && <Button onClick={onLogTime} type="button" variant="outline">
  <Timer className="h-4 w-4" />
  Log 1h
- </Button>
- {task.sprintId ? (
+ </Button>}
+ {canManageTask && (task.sprintId ? (
  <Button onClick={onMoveToBacklog} type="button" variant="outline">Move to backlog</Button>
  ) : (
  <select className="h-10 rounded-md border bg-background px-3 text-sm" onChange={(event) => event.target.value && onMoveToSprint(event.target.value)} value="">
@@ -900,7 +1021,7 @@ function TaskDetailDrawer({
  <option key={sprint.id} value={sprint.id}>{sprint.name}</option>
  ))}
  </select>
- )}
+ ))}
  </div>
  </div>
  </aside>
@@ -970,6 +1091,12 @@ function TimelineView({ tasks }: { tasks: Task[] }) {
 export function TasksPage() {
  const { confirm } = useConfirm();
  const { toast } = useToast();
+ const { hasAnyPermission, hasPermission } = usePermissions();
+ const canCreateTask = hasPermission("task.create");
+ const canUpdateTask = hasPermission("task.update");
+ const canDeleteTask = hasPermission("task.delete");
+ const canLogTime = hasPermission("task.log_time");
+ const canManageTask = hasAnyPermission("task.view_stats", "task.export", "task.delete", "task.bulk_update", "task.bulk_delete");
  const [tasks, setTasks] = useState<Task[]>([]);
  const [projects, setProjects] = useState<ProjectSummary[]>([]);
  const [teamMembers, setTeamMembers] = useState<string[]>([]);
@@ -1054,6 +1181,8 @@ export function TasksPage() {
  description: input.description,
  issueType: input.issueType,
  status: input.status,
+ progress: input.progress,
+ blockedReason: input.status === "Blocked" ? input.blockedReason?.trim() : null,
  priority: input.priority,
  projectId: input.projectId || undefined,
  epicId: input.epicId || undefined,
@@ -1066,6 +1195,7 @@ export function TasksPage() {
  dueDate: input.dueDate || undefined,
  startDate: input.startDate || undefined,
  estimatedHours: input.estimatedHours,
+ checklist: input.checklist.map(({ title, done }) => ({ title, done })),
  recurring: input.recurring,
  recurrence: input.recurrence,
  };
@@ -1105,10 +1235,21 @@ export function TasksPage() {
  };
 
  const updateTaskStatus = (id: string, nextStatus: TaskStatus) => {
+ const task = tasks.find((item) => item.id === id);
+ if (nextStatus === "Blocked" && !task?.blockedReason) {
+ if (task) setSelectedTask(task);
+ toast({ title: "Blocked reason required", description: "Open the task and enter why work is blocked.", type: "warning" });
+ return;
+ }
  const previous = tasks;
  setTasks((current) => current.map((task) => (task.id === id ? { ...task, status: nextStatus } : task)));
 
- apiUpdateTask(id, { status: nextStatus }).catch((error) => {
+ apiUpdateTask(id, { status: nextStatus, ...(nextStatus === "Blocked" ? { blockedReason: task?.blockedReason } : {}) })
+ .then((updated) => {
+ setTasks((current) => current.map((item) => (item.id === id ? (updated as unknown as Task) : item)));
+ setSelectedTask((current) => (current?.id === id ? (updated as unknown as Task) : current));
+ })
+ .catch((error) => {
  setTasks(previous);
  toast({ title: "Could not move task", description: error instanceof Error ? error.message : "Try again.", type: "error" });
  });
@@ -1122,6 +1263,7 @@ export function TasksPage() {
  apiToggleChecklistItem(taskId, itemId, !item.done)
  .then((updated) => {
  setTasks((current) => current.map((entry) => (entry.id === taskId ? (updated as unknown as Task) : entry)));
+ setSelectedTask((current) => (current?.id === taskId ? (updated as unknown as Task) : current));
  })
  .catch((error) => {
  toast({ title: "Could not update checklist", description: error instanceof Error ? error.message : "Try again.", type: "error" });
@@ -1221,10 +1363,10 @@ export function TasksPage() {
  <Link to="/dashboard">Dashboard</Link>
  </Button>
  <ThemeToggle />
- <Button onClick={() => setIsCreating(true)} type="button">
+ {canCreateTask && <Button onClick={() => setIsCreating(true)} type="button">
  <Plus className="h-4 w-4" />
  Create Task
- </Button>
+ </Button>}
  </div>
  </div>
  </header>
@@ -1325,13 +1467,13 @@ export function TasksPage() {
  {view === "kanban" && (
  filteredTasks.length === 0 ? (
  <EmptyState
- action={{ label: "Create Task", onClick: () => setIsCreating(true) }}
+ action={canCreateTask ? { label: "Create Task", onClick: () => setIsCreating(true) } : undefined}
  description="No tasks match the current filters. Clear your search or create a task to get moving."
  icon={ListChecks}
  title="No tasks found"
  />
  ) : (
- <div className="grid gap-4 xl:grid-cols-5">
+ <div className="grid gap-4 xl:grid-cols-6">
  {taskStatuses.map((column) => (
  <Card
  className="glass min-h-[360px]"
@@ -1359,10 +1501,10 @@ export function TasksPage() {
  <TaskCard
  key={task.id}
  projects={projects}
- onDelete={() => deleteTask(task.id)}
- onDragStart={() => setDraggingTaskId(task.id)}
- onEdit={() => setEditingTask(task)}
- onLogTime={() => logTime(task.id)}
+ onDelete={canDeleteTask ? () => deleteTask(task.id) : undefined}
+ onDragStart={canUpdateTask ? () => setDraggingTaskId(task.id) : undefined}
+ onEdit={canManageTask ? () => setEditingTask(task) : undefined}
+ onLogTime={canLogTime ? () => logTime(task.id) : undefined}
  onOpen={() => setSelectedTask(task)}
  onToggleChecklist={(itemId) => toggleChecklist(task.id, itemId)}
  task={task}
@@ -1379,6 +1521,7 @@ export function TasksPage() {
  <BacklogView
  activeProject={activeProject}
  backlogTasks={backlogTasks}
+ canManage={canManageTask}
  onCloseSprint={(sprint) => updateSprintStatus(sprint, "Closed")}
  onCreateSprint={createSprint}
  onMoveToBacklog={moveToBacklog}
@@ -1431,15 +1574,15 @@ export function TasksPage() {
  </td>
  <td className="p-4">
  <div className="flex gap-2">
- <Button onClick={() => setEditingTask(task)} size="sm" type="button" variant="outline">
+ {canManageTask && <Button onClick={() => setEditingTask(task)} size="sm" type="button" variant="outline">
  Edit
- </Button>
+ </Button>}
  <Button onClick={() => setSelectedTask(task)} size="sm" type="button" variant="outline">
  Open
  </Button>
- <Button onClick={() => deleteTask(task.id)} size="sm" type="button" variant="outline">
+ {canDeleteTask && <Button onClick={() => deleteTask(task.id)} size="sm" type="button" variant="outline">
  Delete
- </Button>
+ </Button>}
  </div>
  </td>
  </tr>
@@ -1514,6 +1657,9 @@ export function TasksPage() {
  )}
  {selectedTask && (
  <TaskDetailDrawer
+ canLogTime={canLogTime}
+ canManageTask={canManageTask}
+ canUpdateWork={canUpdateTask}
  onClose={() => setSelectedTask(null)}
  onEdit={() => {
  setEditingTask(selectedTask);
@@ -1522,6 +1668,8 @@ export function TasksPage() {
  onLogTime={() => logTime(selectedTask.id)}
  onMoveToBacklog={() => moveToBacklog(selectedTask)}
  onMoveToSprint={(sprintId) => moveToSprint(selectedTask, sprintId)}
+ onToggleChecklist={(itemId) => toggleChecklist(selectedTask.id, itemId)}
+ onWorkUpdate={(input) => void updateTaskFields(selectedTask, input)}
  projects={projects}
  task={selectedTask}
  />

@@ -84,6 +84,9 @@ export type IssuedDeviceEnrollmentToken = {
 
 export type VerifiedDeviceEnrollmentToken = {
   tokenHash: string;
+  createdBy: string;
+  organizationId?: string;
+  deviceBinding?: string;
   expiresAt: Date;
 };
 
@@ -92,6 +95,8 @@ export class DeviceEnrollmentTokenService {
     input: {
       createdBy: string;
       ttlMinutes?: unknown;
+      organizationId?: string;
+      deviceBinding?: string;
     },
   ): Promise<IssuedDeviceEnrollmentToken> {
     const createdBy =
@@ -110,6 +115,25 @@ export class DeviceEnrollmentTokenService {
       normalizeTtlMinutes(
         input.ttlMinutes,
       );
+
+    const organizationId =
+      clean(input.organizationId);
+
+    const deviceBinding =
+      clean(input.deviceBinding)
+        .toLowerCase();
+
+    if (
+      deviceBinding &&
+      !/^[a-f0-9]{64}$/.test(
+        deviceBinding,
+      )
+    ) {
+      throw new AppError(
+        "Device binding is invalid",
+        400,
+      );
+    }
 
     const now =
       new Date();
@@ -133,6 +157,12 @@ export class DeviceEnrollmentTokenService {
           ),
 
         createdBy,
+        organizationId:
+          organizationId ||
+          undefined,
+        deviceBinding:
+          deviceBinding ||
+          undefined,
         createdAt:
           now,
         expiresAt,
@@ -179,6 +209,67 @@ export class DeviceEnrollmentTokenService {
 
     return {
       tokenHash,
+      createdBy:
+        token.createdBy,
+      organizationId:
+        token.organizationId,
+      deviceBinding:
+        token.deviceBinding,
+      expiresAt:
+        token.expiresAt,
+    };
+  }
+
+  async claimForEnrollment(
+    enrollmentKey: string,
+    deviceBinding?: string,
+  ): Promise<VerifiedDeviceEnrollmentToken | null> {
+    const normalized =
+      clean(enrollmentKey);
+
+    if (
+      !normalized.startsWith(
+        ENROLLMENT_TOKEN_PREFIX,
+      )
+    ) {
+      return null;
+    }
+
+    const normalizedBinding =
+      clean(deviceBinding)
+        .toLowerCase();
+
+    if (
+      normalizedBinding &&
+      !/^[a-f0-9]{64}$/.test(
+        normalizedBinding,
+      )
+    ) {
+      return null;
+    }
+
+    const token =
+      await deviceEnrollmentTokenRepository
+        .consumeByHash(
+          hashToken(normalized),
+          new Date(),
+          normalizedBinding ||
+            undefined,
+        );
+
+    if (!token) {
+      return null;
+    }
+
+    return {
+      tokenHash:
+        hashToken(normalized),
+      createdBy:
+        token.createdBy,
+      organizationId:
+        token.organizationId,
+      deviceBinding:
+        token.deviceBinding,
       expiresAt:
         token.expiresAt,
     };

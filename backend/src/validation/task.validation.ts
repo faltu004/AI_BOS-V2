@@ -1,7 +1,10 @@
 import { z } from "zod";
 import { taskIssueTypes, taskPriorities, taskStatuses } from "../constants/tasks.js";
 
-const dateStringSchema = z.coerce.date();
+const dateStringSchema = z.preprocess((val) => {
+  if (val === null || val === "" || val === undefined) return undefined;
+  return val;
+}, z.coerce.date().optional());
 
 const attachmentSchema = z.object({
   name: z.string().min(1).max(180),
@@ -15,34 +18,48 @@ const checklistItemSchema = z.object({
   done: z.boolean().default(false),
 });
 
+const requireBlockedReason = (value: { status?: string; blockedReason?: string | null }, context: z.RefinementCtx) => {
+  if (value.status === "Blocked" && !value.blockedReason?.trim()) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["blockedReason"],
+      message: "Blocked reason is required when status is Blocked",
+    });
+  }
+};
+
 export const createTaskSchema = z.object({
   title: z.string().min(2).max(200),
-  description: z.string().max(3000).optional(),
+  description: z.string().max(3000).nullable().optional(),
   issueType: z.enum(taskIssueTypes).default("Task"),
   status: z.enum(taskStatuses).default("Todo"),
+  progress: z.number().int().min(0).max(100).default(0),
+  blockedReason: z.string().trim().min(1).max(1000).nullable().optional(),
   priority: z.enum(taskPriorities).default("Medium"),
-  projectId: z.string().min(1).optional(),
-  epicId: z.string().min(1).optional(),
-  sprintId: z.string().min(1).optional(),
-  parentTaskId: z.string().min(1).optional(),
-  backlogRank: z.number().min(0).optional(),
-  assigneeId: z.string().min(1).optional(),
-  reporterId: z.string().min(1).optional(),
+  projectId: z.string().min(1).nullable().optional(),
+  epicId: z.string().min(1).nullable().optional(),
+  sprintId: z.string().min(1).nullable().optional(),
+  parentTaskId: z.string().min(1).nullable().optional(),
+  backlogRank: z.number().min(0).nullable().optional(),
+  assigneeId: z.string().min(1).nullable().optional(),
+  reporterId: z.string().min(1).nullable().optional(),
   labels: z.array(z.string().min(1).max(40)).default([]),
-  dueDate: dateStringSchema.optional(),
-  startDate: dateStringSchema.optional(),
+  dueDate: dateStringSchema,
+  startDate: dateStringSchema,
   estimatedHours: z.number().min(0).default(0),
   checklist: z.array(checklistItemSchema).default([]),
   attachments: z.array(attachmentSchema).default([]),
   recurring: z.boolean().default(false),
   recurrence: z.string().max(40).default("None"),
-});
+}).superRefine(requireBlockedReason);
 
 export const updateTaskSchema = z.object({
   title: z.string().min(2).max(200).optional(),
   description: z.string().max(3000).optional(),
   issueType: z.enum(taskIssueTypes).optional(),
   status: z.enum(taskStatuses).optional(),
+  progress: z.number().int().min(0).max(100).optional(),
+  blockedReason: z.string().trim().min(1).max(1000).nullable().optional(),
   priority: z.enum(taskPriorities).optional(),
   projectId: z.string().min(1).nullable().optional(),
   epicId: z.string().min(1).nullable().optional(),
@@ -52,15 +69,15 @@ export const updateTaskSchema = z.object({
   assigneeId: z.string().min(1).nullable().optional(),
   reporterId: z.string().min(1).nullable().optional(),
   labels: z.array(z.string().min(1).max(40)).optional(),
-  dueDate: dateStringSchema.optional(),
-  startDate: dateStringSchema.optional(),
+  dueDate: dateStringSchema,
+  startDate: dateStringSchema,
   estimatedHours: z.number().min(0).optional(),
   checklist: z.array(checklistItemSchema).optional(),
   attachments: z.array(attachmentSchema).optional(),
   recurring: z.boolean().optional(),
   recurrence: z.string().max(40).optional(),
   isArchived: z.boolean().optional(),
-});
+}).superRefine(requireBlockedReason);
 
 export const taskIdParamsSchema = z.object({
   id: z.string().min(1),
@@ -108,12 +125,14 @@ export const bulkUpdateTasksSchema = z.object({
   ids: z.array(z.string().min(1)).min(1),
   updates: z.object({
     status: z.enum(taskStatuses).optional(),
+    progress: z.number().int().min(0).max(100).optional(),
+    blockedReason: z.string().trim().min(1).max(1000).nullable().optional(),
     priority: z.enum(taskPriorities).optional(),
     sprintId: z.string().min(1).nullable().optional(),
     epicId: z.string().min(1).nullable().optional(),
     backlogRank: z.number().min(0).nullable().optional(),
     isArchived: z.boolean().optional(),
-  }),
+  }).superRefine(requireBlockedReason),
 });
 
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;

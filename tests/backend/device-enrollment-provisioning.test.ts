@@ -134,6 +134,10 @@ test("one-time enrollment credential expiry and consumption are enforced by repo
       expiresAt: {
         $gt: now,
       },
+      $or: [
+        { deviceBinding: { $exists: false } },
+        { deviceBinding: null },
+      ],
     });
     assert.deepEqual((calls[1] as any[])[2], {
       $set: {
@@ -143,6 +147,54 @@ test("one-time enrollment credential expiry and consumption are enforced by repo
   } finally {
     DeviceEnrollmentTokenModel.findOne = originalFindOne;
     DeviceEnrollmentTokenModel.findOneAndUpdate = originalFindOneAndUpdate;
+  }
+});
+
+test("authenticated enrollment bootstrap is device-bound and atomically single-use", async () => {
+  const { deviceEnrollmentTokenService } = await import(
+    "../../backend/src/services/device-enrollment-token.service.ts"
+  );
+  const { deviceEnrollmentTokenRepository } = await import(
+    "../../backend/src/repositories/device-enrollment-token.repository.ts"
+  );
+
+  const originalConsume = deviceEnrollmentTokenRepository.consumeByHash;
+  const binding = "d".repeat(64);
+  let receivedBinding: string | undefined;
+  let calls = 0;
+
+  deviceEnrollmentTokenRepository.consumeByHash = (async (_hash: string, _now: Date, deviceBinding?: string) => {
+    calls += 1;
+    receivedBinding = deviceBinding;
+    return calls === 1
+      ? {
+          tokenHash: "e".repeat(64),
+          createdBy: "employee-1",
+          organizationId: "org-1",
+          deviceBinding: binding,
+          createdAt: new Date(),
+          expiresAt: new Date(Date.now() + 60_000),
+          consumedAt: new Date(),
+        }
+      : null;
+  }) as any;
+
+  try {
+    const first = await deviceEnrollmentTokenService.claimForEnrollment(
+      "aibos_enroll_ot_test",
+      binding,
+    );
+    assert.equal(receivedBinding, binding);
+    assert.equal(first?.createdBy, "employee-1");
+    assert.equal(first?.organizationId, "org-1");
+
+    const replay = await deviceEnrollmentTokenService.claimForEnrollment(
+      "aibos_enroll_ot_test",
+      binding,
+    );
+    assert.equal(replay, null);
+  } finally {
+    deviceEnrollmentTokenRepository.consumeByHash = originalConsume;
   }
 });
 

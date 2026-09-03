@@ -22,46 +22,48 @@ type DivDialogProps = DialogProps & {
 };
 
 function useDialogBehavior(onClose: () => void) {
- const panelRef = useRef<HTMLElement | null>(null);
+  const panelRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
- useEffect(() => {
- const triggerElement = document.activeElement as HTMLElement | null;
- panelRef.current?.focus();
+  useEffect(() => {
+    const triggerElement = document.activeElement as HTMLElement | null;
+    panelRef.current?.focus();
 
- function handleKeyDown(event: KeyboardEvent) {
- if (event.key === "Escape") {
- event.preventDefault();
- onClose();
- return;
- }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
 
- if (event.key !== "Tab") return;
- const panel = panelRef.current;
- if (!panel) return;
+      if (event.key !== "Tab") return;
+      const panel = panelRef.current;
+      if (!panel) return;
 
- const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
- if (focusable.length === 0) return;
+      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+      if (focusable.length === 0) return;
 
- const first = focusable[0];
- const last = focusable[focusable.length - 1];
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
 
- if (event.shiftKey && document.activeElement === first) {
- event.preventDefault();
- last.focus();
- } else if (!event.shiftKey && document.activeElement === last) {
- event.preventDefault();
- first.focus();
- }
- }
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
 
- document.addEventListener("keydown", handleKeyDown);
- return () => {
- document.removeEventListener("keydown", handleKeyDown);
- triggerElement?.focus?.();
- };
- }, [onClose]);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      triggerElement?.focus?.();
+    };
+  }, []);
 
- return panelRef;
+  return panelRef;
 }
 
 /**

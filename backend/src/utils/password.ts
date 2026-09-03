@@ -65,6 +65,39 @@ export const passwordPolicySchema = z
     }
   });
 
+// Excludes visually ambiguous characters (I, l, O, 0, 1) so an admin can read this out loud or retype it reliably.
+const TEMP_PASSWORD_UPPER = "ABCDEFGHJKMNPQRSTUVWXYZ";
+const TEMP_PASSWORD_LOWER = "abcdefghjkmnpqrstuvwxyz";
+const TEMP_PASSWORD_DIGITS = "23456789";
+const TEMP_PASSWORD_SPECIAL = "!@#$%^&*";
+
+function randomCharFrom(charset: string): string {
+  return charset[crypto.randomInt(charset.length)];
+}
+
+/** Generates a random password that always satisfies the current password policy. */
+export function generateTemporaryPassword(): string {
+  const policy = getPasswordPolicy();
+  const length = Math.max(policy.minLength, 12);
+  const allChars = TEMP_PASSWORD_UPPER + TEMP_PASSWORD_LOWER + TEMP_PASSWORD_DIGITS + TEMP_PASSWORD_SPECIAL;
+
+  const required = [
+    randomCharFrom(TEMP_PASSWORD_UPPER),
+    randomCharFrom(TEMP_PASSWORD_LOWER),
+    randomCharFrom(TEMP_PASSWORD_DIGITS),
+    randomCharFrom(TEMP_PASSWORD_SPECIAL),
+  ];
+  const remaining = Array.from({ length: length - required.length }, () => randomCharFrom(allChars));
+  const combined = [...required, ...remaining];
+
+  for (let i = combined.length - 1; i > 0; i -= 1) {
+    const j = crypto.randomInt(i + 1);
+    [combined[i], combined[j]] = [combined[j], combined[i]];
+  }
+
+  return combined.join("");
+}
+
 export function hashPassword(password: string) {
   return bcrypt.hash(password, env.BCRYPT_SALT_ROUNDS);
 }

@@ -1,4 +1,5 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
+import { enforceMasterControlSwitch } from "./rbac.middleware.js";
 
 export function asyncHandler(controller: RequestHandler): RequestHandler {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -13,5 +14,5 @@ export function route(...handlers: RequestHandler[]): RequestHandler[] {
     return [];
   }
 
-  return [...handlers.slice(0, -1), asyncHandler(controller)];
+  return [enforceMasterControlSwitch, ...handlers.slice(0, -1), asyncHandler(controller)];
 }

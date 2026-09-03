@@ -4,7 +4,7 @@ import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 import path from "node:path";
-import { appConfig } from "./config/app.js";
+import { appConfig, isAllowedOrigin } from "./config/app.js";
 import { dataChangeBroadcastMiddleware } from "./middleware/data-change-broadcast.middleware.js";
 import { errorMiddleware } from "./middleware/error.middleware.js";
 import { notFoundMiddleware } from "./middleware/not-found.middleware.js";
@@ -23,7 +23,12 @@ export function createApp() {
   app.use(helmet());
   app.use(
     cors({
-      origin: appConfig.clientOrigins,
+      origin: (origin, callback) => {
+        if (!origin || isAllowedOrigin(origin)) {
+          return callback(null, true);
+        }
+        return callback(new Error("Not allowed by CORS"));
+      },
       credentials: true,
     }),
   );
@@ -49,6 +54,17 @@ export function createApp() {
   });
 
   app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+
+  // Serves electron-updater's generic-provider feed (latest.yml + installer + .blockmap)
+  // for the Employee desktop app. Populated by the deploy script, not by app code.
+  app.use(
+    "/updates/employee",
+    express.static(
+      path.isAbsolute(appConfig.employeeUpdateFeedDir)
+        ? appConfig.employeeUpdateFeedDir
+        : path.join(process.cwd(), appConfig.employeeUpdateFeedDir),
+    ),
+  );
 
   app.use(appConfig.apiPrefix, routes);
   app.use(notFoundMiddleware);

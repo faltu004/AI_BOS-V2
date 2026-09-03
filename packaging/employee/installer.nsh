@@ -1,5 +1,8 @@
+!define AIBOS_EMPLOYEE_INSTALLER
+!include "${PROJECT_DIR}\packaging\installer-ui.nsh"
+
 !macro customInstall
-  DetailPrint "Installing AI BOS Device Agent services"
+  DetailPrint "Configuring AI BOS Device Agent and Updater services..."
   ClearErrors
   ExecWait '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\resources\device-agent\install\install-device-services.ps1" -InstallRoot "$INSTDIR\resources\device-agent"' $0
   IfErrors device_services_exec_failed 0
@@ -17,7 +20,7 @@
   device_services_installed:
     DetailPrint "AI BOS Device Agent services NSIS interpreted result=success"
 
-  DetailPrint "Installing AI BOS Session Helper startup task"
+  DetailPrint "Configuring AI BOS Session Helper startup..."
   ClearErrors
   ExecWait '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\resources\device-agent\install\session-helper-task.ps1" -InstallRoot "$INSTDIR\resources\device-agent"' $0
   IfErrors session_helper_exec_failed 0
@@ -34,6 +37,7 @@
     Quit
   session_helper_installed:
     DetailPrint "AI BOS Session Helper NSIS interpreted result=success"
+    DetailPrint "Finalizing AI BOS Employee installation..."
 !macroend
 
 !macro customUnInstall

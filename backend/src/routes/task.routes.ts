@@ -1,9 +1,10 @@
 import { Router } from "express";
 import { taskController } from "../controllers/task.controller.js";
 import { taskCommentController } from "../controllers/task-comment.controller.js";
-import { route } from "../middleware/async-handler.js";
+import { asyncHandler, route } from "../middleware/async-handler.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 import { requirePermission } from "../middleware/rbac.middleware.js";
+import { taskService } from "../services/task.service.js";
 import { validate } from "../middleware/validate.middleware.js";
 import {
   bulkDeleteTasksSchema,
@@ -26,6 +27,11 @@ import {
 } from "../validation/task-comment.validation.js";
 
 export const taskRoutes = Router();
+
+const requireTaskAccess = asyncHandler(async (req, _res, next) => {
+  await taskService.assertCanView(req.params.id, req.user!);
+  next();
+});
 
 taskRoutes.use(authenticate);
 
@@ -106,6 +112,7 @@ taskRoutes.get(
   "/:id/comments",
   ...route(
     validate({ params: commentResourceParamsSchema, query: listCommentsQuerySchema }),
+    requireTaskAccess,
     taskCommentController.list,
   ),
 );
@@ -115,6 +122,7 @@ taskRoutes.post(
   ...route(
     requirePermission("task.comment"),
     validate({ params: commentResourceParamsSchema, body: createCommentSchema }),
+    requireTaskAccess,
     taskCommentController.create,
   ),
 );
@@ -124,6 +132,7 @@ taskRoutes.patch(
   ...route(
     requirePermission("task.comment"),
     validate({ params: commentIdParamsSchema, body: updateCommentSchema }),
+    requireTaskAccess,
     taskCommentController.update,
   ),
 );
@@ -133,6 +142,7 @@ taskRoutes.delete(
   ...route(
     requirePermission("task.comment"),
     validate({ params: commentIdParamsSchema }),
+    requireTaskAccess,
     taskCommentController.delete,
   ),
 );

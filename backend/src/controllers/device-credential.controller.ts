@@ -5,6 +5,12 @@
 import {
   deviceCredentialService,
 } from "../services/device-credential.service.js";
+import {
+  auditLogService,
+} from "../services/audit-log.service.js";
+import {
+  userRepository,
+} from "../repositories/user.repository.js";
 
 import {
   AppError,
@@ -35,7 +41,191 @@ function optionalString(
     : undefined;
 }
 
+function requiredString(
+  value: unknown,
+  message: string,
+): string {
+  const resolved =
+    optionalString(value);
+
+  if (!resolved) {
+    throw new AppError(
+      message,
+      400,
+    );
+  }
+
+  return resolved;
+}
+
 export class DeviceCredentialController {
+  requestRecoveryAuthorization:
+    RequestHandler =
+    async (
+      req,
+      res,
+    ) => {
+      const actorUserId =
+        req.user?.id ?? "";
+      const user =
+        await userRepository
+          .findById(actorUserId);
+      const organizationId =
+        user?.organizationId
+          ?.toString() ?? "";
+
+      if (
+        !user ||
+        !user.isActive ||
+        !organizationId
+      ) {
+        throw new AppError(
+          "Authenticated organization membership is required",
+          403,
+        );
+      }
+
+      const issued =
+        await deviceCredentialService
+          .requestRecoveryAuthorization({
+            deviceId:
+              requiredDeviceId(
+                req.body?.deviceId,
+              ),
+            deviceBinding:
+              requiredString(
+                req.body?.deviceBinding,
+                "Device binding is required",
+              ),
+            organizationId,
+            requestedBy:
+              actorUserId,
+          });
+
+      await auditLogService.record({
+        actorUserId,
+        actorRole:
+          req.user?.role,
+        category:
+          "device_update",
+        method: "POST",
+        path:
+          "/devices/credential/recovery/self",
+        resourceType:
+          "device_credential",
+        resourceId:
+          issued.deviceId,
+        statusCode: 201,
+        success: true,
+        metadata: {
+          organizationId,
+          expiresAt:
+            issued.expiresAt
+              .toISOString(),
+          authorizationType:
+            "authenticated_device_recovery",
+        },
+      });
+
+      res.setHeader(
+        "Cache-Control",
+        "no-store",
+      );
+      res.setHeader(
+        "Pragma",
+        "no-cache",
+      );
+
+      res.status(201).json({
+        success: true,
+        message:
+          "Device credential recovery authorized",
+        data: issued,
+      });
+    };
+
+  recover:
+    RequestHandler =
+    async (
+      req,
+      res,
+    ) => {
+      const result =
+        await deviceCredentialService
+          .recoverWithAuthorization({
+            deviceId:
+              requiredDeviceId(
+                req.body?.deviceId,
+              ),
+            deviceBinding:
+              requiredString(
+                req.body?.deviceBinding,
+                "Device binding is required",
+              ),
+            fingerprint:
+              requiredString(
+                req.body?.fingerprint,
+                "Device fingerprint is required",
+              ),
+            recoveryAuthorization:
+              requiredString(
+                req.header(
+                  "x-device-recovery-authorization",
+                ),
+                "Device recovery authorization is required",
+              ),
+          });
+
+      await auditLogService.record({
+        actorUserId:
+          result.requestedBy,
+        category:
+          "device_update",
+        method: "POST",
+        path:
+          "/devices/credential/recovery",
+        resourceType:
+          "device_credential",
+        resourceId:
+          result.deviceId,
+        statusCode: 200,
+        success: true,
+        metadata: {
+          organizationId:
+            result.organizationId,
+          credentialVersion:
+            result.credentialVersion,
+          recoveryType:
+            "authenticated_bound_recovery",
+        },
+      });
+
+      res.setHeader(
+        "Cache-Control",
+        "no-store",
+      );
+      res.setHeader(
+        "Pragma",
+        "no-cache",
+      );
+
+      res.status(200).json({
+        success: true,
+        message:
+          "Device credential recovered",
+        data: {
+          deviceId:
+            result.deviceId,
+          deviceToken:
+            result.deviceToken,
+          credentialVersion:
+            result.credentialVersion,
+          issuedAt:
+            result.issuedAt,
+        },
+      });
+    };
+
   getStatus:
     RequestHandler =
     async (

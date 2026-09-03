@@ -96,6 +96,13 @@ userRoutes.patch(
   asyncHandler(userController.updateProfile),
 );
 
+userRoutes.post(
+  "/:id/reset-password",
+  authenticate,
+  requirePermission("user.edit"),
+  asyncHandler(userController.resetPassword),
+);
+
 userRoutes.delete(
   "/:id",
   authenticate,

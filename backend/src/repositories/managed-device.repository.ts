@@ -68,12 +68,14 @@ function removeUndefinedValues(
 export class ManagedDeviceRepository {
   async upsertRegistration(
     input: UpsertRegistrationInput,
+    options: {
+      clearAuthenticatedUser?: boolean;
+    } = {},
   ) {
     const updateData = removeUndefinedValues({
       fingerprint: input.fingerprint,
 
       hostname: input.hostname,
-      username: input.username,
 
       os: input.os,
       osVersion: input.osVersion,
@@ -100,6 +102,13 @@ export class ManagedDeviceRepository {
       },
       {
         $set: updateData,
+        ...(options.clearAuthenticatedUser
+          ? {
+              $unset: {
+                username: "",
+              },
+            }
+          : {}),
         $setOnInsert: {
           deviceId: input.deviceId,
         },
@@ -133,7 +142,6 @@ export class ManagedDeviceRepository {
       sessionTelemetryStale: input.sessionTelemetryStale,
       lastHeartbeatLatencyMs: input.lastHeartbeatLatencyMs,
 
-      username: input.username,
       lastIp: input.lastIp,
 
 
@@ -169,6 +177,52 @@ export class ManagedDeviceRepository {
     return ManagedDeviceModel.findOne({
       deviceId,
     }).lean();
+  }
+
+  async findDeviceIdentities() {
+    return ManagedDeviceModel.find()
+      .select("deviceId fingerprint")
+      .lean();
+  }
+
+  async setAuthenticatedUser(
+    deviceId: string,
+    fullName: string,
+  ) {
+    return ManagedDeviceModel.findOneAndUpdate(
+      {
+        deviceId,
+      },
+      {
+        $set: {
+          username: fullName,
+        },
+      },
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
+  }
+
+  async clearAuthenticatedUser(
+    deviceId: string,
+    fullName: string,
+  ) {
+    return ManagedDeviceModel.findOneAndUpdate(
+      {
+        deviceId,
+        username: fullName,
+      },
+      {
+        $unset: {
+          username: "",
+        },
+      },
+      {
+        new: true,
+      },
+    );
   }
 
   async markOffline(deviceId: string) {

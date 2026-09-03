@@ -31,6 +31,7 @@
                 "signExecutable":  false
             },
     "nsis":  {
+                 "include":  "packaging/admin/installer.nsh",
                  "oneClick":  false,
                  "allowToChangeInstallationDirectory":  true,
                  "createDesktopShortcut":  true,
@@ -38,6 +39,9 @@
                  "perMachine":  true,
                  "installerIcon":  "packaging/assets/icons/AI-BOS-Admin.ico",
                  "uninstallerIcon":  "packaging/assets/icons/AI-BOS-Admin.ico",
+                 "installerHeader":  "packaging/assets/installer/admin-header.bmp",
+                 "installerSidebar":  "packaging/assets/installer/admin-sidebar.bmp",
+                 "uninstallerSidebar":  "packaging/assets/installer/admin-sidebar.bmp",
                  "shortcutName":  "AI BOS Admin"
              }
 }

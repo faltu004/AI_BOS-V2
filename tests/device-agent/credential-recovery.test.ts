@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
@@ -12,6 +13,7 @@ process.env.DEVICE_ENROLLMENT_KEY = "";
 process.env.HEARTBEAT_INTERVAL = "30000";
 
 const originalPath = process.env.PATH;
+const originalSystemRoot = process.env.SystemRoot;
 
 const testRoot = path.join(
   os.tmpdir(),
@@ -20,6 +22,7 @@ const testRoot = path.join(
 
 process.env.ProgramData = path.join(testRoot, "ProgramData");
 process.env.PROGRAMDATA = process.env.ProgramData;
+process.env.SystemRoot = path.join(testRoot, "MissingWindowsRoot");
 
 const si = (await import(
   "../../device-agent/node_modules/systeminformation/lib/index.js"
@@ -55,19 +58,27 @@ const axios = (await import(
 )).default as any;
 const originalPost = axios.post;
 
-process.env.PATH = "";
-
 const {
   isDeviceEnrollmentRequiredError,
   isInvalidDeviceAuthenticationError,
   prepareDeviceIdentity,
 } = await import("../../device-agent/src/device-enrollment.ts");
 
-const { startHeartbeat } = await import("../../device-agent/src/heartbeat.ts");
 const {
   clearSessionTelemetryForTest,
-  updateLatestSessionTelemetry,
 } = await import("../../device-agent/src/session-telemetry.ts");
+
+const {
+  recoverRejectedDeviceCredential,
+} = await import("../../device-agent/src/device-credential-recovery.ts");
+
+const {
+  deriveDeviceBinding,
+} = await import("../../device-agent/src/device-binding.ts");
+
+const {
+  startHeartbeat,
+} = await import("../../device-agent/src/heartbeat.ts");
 
 const protectedRoot = path.join(
   process.env.ProgramData,
@@ -124,34 +135,10 @@ function invalidAuthError(): unknown {
   };
 }
 
-async function waitFor(
-  predicate: () => boolean,
-): Promise<void> {
-  const deadline =
-    Date.now() + 2000;
-
-  while (Date.now() < deadline) {
-    if (predicate()) {
-      return;
-    }
-
-    await new Promise(
-      (resolve) =>
-        setTimeout(
-          resolve,
-          20,
-        ),
-    );
-  }
-
-  throw new Error(
-    "Timed out waiting for condition",
-  );
-}
-
 test.after(async () => {
   axios.post = originalPost;
   process.env.PATH = originalPath;
+  process.env.SystemRoot = originalSystemRoot;
   clearSessionTelemetryForTest();
 
   await rm(testRoot, {
@@ -282,7 +269,10 @@ test("invalid credential without bootstrap is classified without stale-token ret
 
   await assert.rejects(
     prepareDeviceIdentity(),
-    isDeviceEnrollmentRequiredError,
+    (error: unknown) =>
+      isDeviceEnrollmentRequiredError(error) &&
+      error.reason ===
+        "invalid_stored_credential",
   );
 
   assert.equal(
@@ -295,7 +285,208 @@ test("invalid credential without bootstrap is classified without stale-token ret
   );
 });
 
-test("invalid credential with protected bootstrap re-enrolls, consumes bootstrap, and allows heartbeat", async () => {
+test("explicit recovery replaces the rejected credential, then register and heartbeat use only the replacement", async () => {
+  await resetFiles();
+
+  const fingerprint =
+    "stable-test-machine-uuid";
+  const deviceId =
+    "DEV-" +
+    createHash("sha256")
+      .update(fingerprint)
+      .digest("hex")
+      .slice(0, 12)
+      .toUpperCase();
+  const deviceBinding =
+    deriveDeviceBinding(fingerprint);
+  const oldToken =
+    "aibos_device_rejected_aug29_token";
+  const newToken =
+    "aibos_device_recovered_bound_token";
+  const recoveryAuthorization =
+    "aibos_recover_ot_authenticated-once";
+  const capturedLogs: string[] = [];
+  const originalLog = console.log;
+  const originalWarn = console.warn;
+  const originalError = console.error;
+
+  await writeEnv(
+    [
+      `DEVICE_ID=${deviceId}`,
+      `DEVICE_TOKEN=${oldToken}`,
+    ].join("\n"),
+  );
+
+  let recoveryAttempts = 0;
+  let registerAttempts = 0;
+  let heartbeatAttempts = 0;
+
+  axios.post = async (
+    url: string,
+    body: any,
+    options: any,
+  ) => {
+    if (
+      url.endsWith(
+        "/api/v1/devices/credential/recovery",
+      )
+    ) {
+      recoveryAttempts += 1;
+      assert.equal(body.deviceId, deviceId);
+      assert.equal(
+        body.deviceBinding,
+        deviceBinding,
+      );
+      assert.equal(
+        body.fingerprint,
+        fingerprint,
+      );
+      assert.equal(
+        options.headers[
+          "x-device-recovery-authorization"
+        ],
+        recoveryAuthorization,
+      );
+
+      return {
+        data: {
+          success: true,
+          data: {
+            deviceId,
+            deviceToken: newToken,
+            credentialVersion: 2,
+            issuedAt:
+              "2026-08-31T00:00:00.000Z",
+          },
+        },
+      };
+    }
+
+    if (
+      url.endsWith(
+        "/api/v1/devices/register",
+      )
+    ) {
+      registerAttempts += 1;
+      assert.equal(body.deviceId, deviceId);
+      assert.equal(
+        options.headers["x-device-token"],
+        newToken,
+      );
+
+      return {
+        data: {
+          success: true,
+          data: { deviceId },
+        },
+      };
+    }
+
+    if (
+      url.endsWith(
+        "/api/v1/devices/heartbeat",
+      )
+    ) {
+      heartbeatAttempts += 1;
+      assert.equal(body.deviceId, deviceId);
+      assert.equal(
+        options.headers["x-device-token"],
+        newToken,
+      );
+
+      return {
+        data: {
+          success: true,
+        },
+      };
+    }
+
+    throw new Error(
+      "Unexpected request " + url,
+    );
+  };
+
+  console.log = (...args: unknown[]) => {
+    capturedLogs.push(args.join(" "));
+  };
+  console.warn = (...args: unknown[]) => {
+    capturedLogs.push(args.join(" "));
+  };
+  console.error = (...args: unknown[]) => {
+    capturedLogs.push(args.join(" "));
+  };
+
+  try {
+    await recoverRejectedDeviceCredential({
+      deviceId,
+      deviceBinding,
+      recoveryAuthorization,
+    });
+
+    const recoveredEnv = await readEnv();
+    assert.match(
+      recoveredEnv,
+      new RegExp(`DEVICE_ID=${deviceId}`),
+    );
+    assert.match(
+      recoveredEnv,
+      new RegExp(`DEVICE_TOKEN=${newToken}`),
+    );
+    assert.equal(
+      recoveredEnv.includes(oldToken),
+      false,
+    );
+
+    assert.equal(
+      await prepareDeviceIdentity(),
+      deviceId,
+    );
+
+    const stopHeartbeat = startHeartbeat({
+      deviceId,
+    });
+    try {
+      const timeoutAt = Date.now() + 5_000;
+      while (
+        heartbeatAttempts === 0 &&
+        Date.now() < timeoutAt
+      ) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, 20),
+        );
+      }
+    } finally {
+      await stopHeartbeat();
+    }
+
+    assert.equal(recoveryAttempts, 1);
+    assert.equal(registerAttempts, 1);
+    assert.equal(heartbeatAttempts, 1);
+
+    const joinedLogs =
+      capturedLogs.join("\n");
+    assert.equal(
+      joinedLogs.includes(
+        recoveryAuthorization,
+      ),
+      false,
+    );
+    assert.equal(
+      joinedLogs.includes(oldToken),
+      false,
+    );
+    assert.equal(
+      joinedLogs.includes(newToken),
+      false,
+    );
+  } finally {
+    console.log = originalLog;
+    console.warn = originalWarn;
+    console.error = originalError;
+  }
+});
+
+test("invalid stored credential never triggers implicit initial-enrollment replacement", async () => {
   await resetFiles();
 
   const staleToken =
@@ -450,72 +641,39 @@ test("invalid credential with protected bootstrap re-enrolls, consumes bootstrap
   };
 
   try {
-    assert.equal(
-      await prepareDeviceIdentity(),
-      "DEV-REENROLLED",
+    await assert.rejects(
+      prepareDeviceIdentity(),
+      isDeviceEnrollmentRequiredError,
     );
 
     assert.equal(
       registerAttempts,
-      2,
+      1,
     );
     assert.equal(
       enrollAttempts,
-      1,
+      0,
     );
 
     const envContent =
       await readEnv();
     assert.match(
       envContent,
-      /DEVICE_ID=DEV-REENROLLED/,
+      /DEVICE_ID=DEV-STALE/,
     );
     assert.match(
       envContent,
-      /DEVICE_TOKEN=aibos_device_new_reenrolled_token/,
+      /DEVICE_TOKEN=aibos_device_stale_token_before_reenroll/,
     );
 
-    await assert.rejects(
-      stat(
-        bootstrapEnv,
-      ),
-      /ENOENT/,
+    await stat(
+      bootstrapEnv,
     );
 
-    updateLatestSessionTelemetry({
-      deviceId:
-        "DEV-REENROLLED",
-      currentUser:
-        "interactive-user",
-      sessionState:
-        "active",
-      currentApplication: {
-        processName:
-          "Code.exe",
-        pid:
-          4321,
-        capturedAt:
-          new Date()
-            .toISOString(),
-      },
-      collectedAt:
-        new Date()
-          .toISOString(),
-    });
-
-    const stopHeartbeat =
-      startHeartbeat({
-        deviceId:
-          "DEV-REENROLLED",
-      });
-
-    await waitFor(
-      () =>
-        heartbeatAttempts >
-        0,
+    assert.equal(
+      heartbeatAttempts,
+      0,
     );
-
-    await stopHeartbeat();
 
     const joinedLogs =
       capturedLogs.join("\n");

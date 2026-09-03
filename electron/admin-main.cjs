@@ -5,7 +5,8 @@ const {
   protocol,
   net,
   ipcMain,
-  dialog
+  dialog,
+  session
 } = require("electron");
 
 const path = require("node:path");
@@ -23,6 +24,32 @@ registerAppSchemePrivileges(protocol);
 
 let mainWindow;
 let runtimeConfig = Object.freeze({});
+
+function configureMediaPermissions() {
+  const trustedOrigin = APP_ORIGIN;
+
+  session.defaultSession.setPermissionRequestHandler(
+    (webContents, permission, callback) => {
+      const url = webContents.getURL();
+      callback(
+        ["media", "geolocation", "notifications"].includes(permission) &&
+          isAppUrl(url) &&
+          url.startsWith(trustedOrigin),
+      );
+    },
+  );
+
+  session.defaultSession.setPermissionCheckHandler(
+    (webContents, permission, requestingOrigin) => {
+      const url = webContents?.getURL?.() ?? "";
+      return (
+        ["media", "geolocation", "notifications"].includes(permission) &&
+        isAppUrl(url) &&
+        requestingOrigin === trustedOrigin
+      );
+    },
+  );
+}
 
 ipcMain.on(
   "aibos:get-runtime-config",
@@ -150,6 +177,7 @@ app.whenReady().then(() => {
       });
     }
 
+    configureMediaPermissions();
     createWindow();
   } catch (error) {
     const message =

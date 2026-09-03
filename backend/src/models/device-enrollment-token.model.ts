@@ -7,6 +7,8 @@ import {
 export type DeviceEnrollmentToken = {
   tokenHash: string;
   createdBy: string;
+  organizationId?: string;
+  deviceBinding?: string;
   createdAt: Date;
   expiresAt: Date;
   consumedAt?: Date | null;
@@ -35,6 +37,20 @@ const deviceEnrollmentTokenSchema =
         maxlength: 100,
       },
 
+      organizationId: {
+        type: String,
+        trim: true,
+        maxlength: 100,
+      },
+
+      deviceBinding: {
+        type: String,
+        trim: true,
+        lowercase: true,
+        minlength: 64,
+        maxlength: 64,
+      },
+
       createdAt: {
         type: Date,
         required: true,
@@ -44,7 +60,6 @@ const deviceEnrollmentTokenSchema =
       expiresAt: {
         type: Date,
         required: true,
-        index: true,
       },
 
       consumedAt: {
@@ -63,6 +78,15 @@ deviceEnrollmentTokenSchema.index({
   consumedAt: 1,
   expiresAt: 1,
 });
+
+deviceEnrollmentTokenSchema.index(
+  {
+    expiresAt: 1,
+  },
+  {
+    expireAfterSeconds: 0,
+  },
+);
 
 export const DeviceEnrollmentTokenModel =
   model(

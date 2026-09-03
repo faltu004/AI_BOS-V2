@@ -3,6 +3,7 @@ import {
  Clock,
  FileClock,
  Layers,
+ Pencil,
  Plus,
  Save,
  ShieldAlert,
@@ -37,7 +38,9 @@ import {
  fetchRoleHistory,
  fetchRoles,
  fetchRoleTemplates,
+ updatePermissionGroup,
  updateRole,
+ updateRoleTemplate,
 } from "./rbac.api";
 import {
  emptyPermissionGroupForm,
@@ -105,6 +108,7 @@ export function RBACPage() {
 
  const [selectedRoleId, setSelectedRoleId] = useState<string>("");
  const [matrixPermissionKeys, setMatrixPermissionKeys] = useState<string[]>([]);
+ const [matrixTemplateId, setMatrixTemplateId] = useState("");
  const [savingMatrix, setSavingMatrix] = useState(false);
 
  const [roleForm, setRoleForm] = useState<RoleFormInput>(emptyRoleForm);
@@ -112,9 +116,13 @@ export function RBACPage() {
 
  const [groupForm, setGroupForm] = useState<PermissionGroupFormInput>(emptyPermissionGroupForm);
  const [showGroupForm, setShowGroupForm] = useState(false);
+ const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+ const [savingGroup, setSavingGroup] = useState(false);
 
  const [templateForm, setTemplateForm] = useState<RoleTemplateFormInput>(emptyRoleTemplateForm);
  const [showTemplateForm, setShowTemplateForm] = useState(false);
+ const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+ const [savingTemplate, setSavingTemplate] = useState(false);
 
  const [historyRoleId, setHistoryRoleId] = useState<string>("");
  const [historyEntries, setHistoryEntries] = useState<RoleHistoryEntry[]>([]);
@@ -160,6 +168,7 @@ export function RBACPage() {
  const selectRoleForMatrix = (role: Role) => {
  setSelectedRoleId(role._id);
  setMatrixPermissionKeys(role.permissionKeys);
+ setMatrixTemplateId("");
  };
 
  const toggleMatrixPermission = (key: string) => {
@@ -168,18 +177,52 @@ export function RBACPage() {
  );
  };
 
+ const applyTemplateToMatrix = (templateId: string) => {
+ setMatrixTemplateId(templateId);
+ const template = templates.find((item) => item._id === templateId);
+ if (!template) return;
+
+ const catalogKeys = new Set(catalog.map((entry) => entry.key));
+ setMatrixPermissionKeys(template.permissionKeys.filter((key) => catalogKeys.has(key)));
+ };
+
  const saveMatrix = async () => {
  if (!selectedRole) return;
  setSavingMatrix(true);
  try {
  const updated = await updateRole(selectedRole._id, { permissionKeys: matrixPermissionKeys }, token);
  setRoles((current) => current.map((role) => (role._id === updated._id ? updated : role)));
+ setMatrixTemplateId("");
  toast({ title: "Permissions updated", description: `${selectedRole.name} permissions saved.`, type: "success" });
  } catch (error) {
  toast({ title: "Failed to update permissions", description: (error as Error).message, type: "error" });
  } finally {
  setSavingMatrix(false);
  }
+ };
+
+ const applyTemplateToRoleForm = (templateId: string) => {
+ const template = templates.find((item) => item._id === templateId);
+ if (!template) {
+ setRoleForm((current) => ({ ...current, templateId }));
+ return;
+ }
+
+ const catalogKeys = new Set(catalog.map((entry) => entry.key));
+ setRoleForm((current) => ({
+ ...current,
+ templateId,
+ permissionKeys: template.permissionKeys.filter((key) => catalogKeys.has(key)),
+ }));
+ };
+
+ const toggleRoleFormPermission = (key: string) => {
+ setRoleForm((current) => ({
+ ...current,
+ permissionKeys: current.permissionKeys.includes(key)
+ ? current.permissionKeys.filter((item) => item !== key)
+ : [...current.permissionKeys, key],
+ }));
  };
 
  const submitRole = async () => {
@@ -211,15 +254,65 @@ export function RBACPage() {
  }
  };
 
+ const closeGroupForm = () => {
+ setGroupForm(emptyPermissionGroupForm);
+ setEditingGroupId(null);
+ setShowGroupForm(false);
+ };
+
+ const startCreateGroup = () => {
+ if (showGroupForm && editingGroupId === null) {
+ closeGroupForm();
+ return;
+ }
+
+ setGroupForm(emptyPermissionGroupForm);
+ setEditingGroupId(null);
+ setShowGroupForm(true);
+ };
+
+ const startEditGroup = (group: PermissionGroup) => {
+ const catalogKeys = new Set(catalog.map((entry) => entry.key));
+
+ setGroupForm({
+ name: group.name,
+ description: group.description ?? "",
+ permissionKeys: group.permissionKeys.filter((key) => catalogKeys.has(key)),
+ });
+ setEditingGroupId(group._id);
+ setShowGroupForm(true);
+ };
+
+ const toggleGroupPermission = (key: string) => {
+ setGroupForm((current) => ({
+ ...current,
+ permissionKeys: current.permissionKeys.includes(key)
+ ? current.permissionKeys.filter((item) => item !== key)
+ : [...current.permissionKeys, key],
+ }));
+ };
+
  const submitGroup = async () => {
+ setSavingGroup(true);
  try {
+ if (editingGroupId) {
+ const updated = await updatePermissionGroup(editingGroupId, groupForm, token);
+ setGroups((current) => current.map((group) => (group._id === updated._id ? updated : group)));
+ toast({ title: "Permission group updated", type: "success" });
+ } else {
  const created = await createPermissionGroup(groupForm, token);
  setGroups((current) => [...current, created]);
- setGroupForm(emptyPermissionGroupForm);
- setShowGroupForm(false);
  toast({ title: "Permission group created", type: "success" });
+ }
+ closeGroupForm();
  } catch (error) {
- toast({ title: "Failed to create permission group", description: (error as Error).message, type: "error" });
+ toast({
+ title: editingGroupId ? "Failed to update permission group" : "Failed to create permission group",
+ description: (error as Error).message,
+ type: "error",
+ });
+ } finally {
+ setSavingGroup(false);
  }
  };
 
@@ -240,15 +333,65 @@ export function RBACPage() {
  }
  };
 
+ const closeTemplateForm = () => {
+ setTemplateForm(emptyRoleTemplateForm);
+ setEditingTemplateId(null);
+ setShowTemplateForm(false);
+ };
+
+ const startCreateTemplate = () => {
+ if (showTemplateForm && editingTemplateId === null) {
+ closeTemplateForm();
+ return;
+ }
+
+ setTemplateForm(emptyRoleTemplateForm);
+ setEditingTemplateId(null);
+ setShowTemplateForm(true);
+ };
+
+ const startEditTemplate = (template: RoleTemplate) => {
+ const catalogKeys = new Set(catalog.map((entry) => entry.key));
+
+ setTemplateForm({
+ name: template.name,
+ description: template.description ?? "",
+ permissionKeys: template.permissionKeys.filter((key) => catalogKeys.has(key)),
+ });
+ setEditingTemplateId(template._id);
+ setShowTemplateForm(true);
+ };
+
+ const toggleTemplatePermission = (key: string) => {
+ setTemplateForm((current) => ({
+ ...current,
+ permissionKeys: current.permissionKeys.includes(key)
+ ? current.permissionKeys.filter((item) => item !== key)
+ : [...current.permissionKeys, key],
+ }));
+ };
+
  const submitTemplate = async () => {
+ setSavingTemplate(true);
  try {
+ if (editingTemplateId) {
+ const updated = await updateRoleTemplate(editingTemplateId, templateForm, token);
+ setTemplates((current) => current.map((template) => (template._id === updated._id ? updated : template)));
+ toast({ title: "Role template updated", type: "success" });
+ } else {
  const created = await createRoleTemplate(templateForm, token);
  setTemplates((current) => [...current, created]);
- setTemplateForm(emptyRoleTemplateForm);
- setShowTemplateForm(false);
  toast({ title: "Role template created", type: "success" });
+ }
+ closeTemplateForm();
  } catch (error) {
- toast({ title: "Failed to create role template", description: (error as Error).message, type: "error" });
+ toast({
+ title: editingTemplateId ? "Failed to update role template" : "Failed to create role template",
+ description: (error as Error).message,
+ type: "error",
+ });
+ } finally {
+ setSavingTemplate(false);
  }
  };
 
@@ -371,6 +514,27 @@ export function RBACPage() {
  >
  {selectedRole && (
  <div className="space-y-5">
+ {!selectedRole.isSystem && (
+ <div className="space-y-2">
+ <Label htmlFor="matrixRoleTemplate">Apply Role Template</Label>
+ <select
+ className="h-11 w-full rounded-lg border bg-background px-3 text-sm outline-none focus:border-primary"
+ id="matrixRoleTemplate"
+ value={matrixTemplateId}
+ onChange={(event) => applyTemplateToMatrix(event.target.value)}
+ >
+ <option value="">Choose a template</option>
+ {templates.map((template) => (
+ <option key={template._id} value={template._id}>
+ {template.name}
+ </option>
+ ))}
+ </select>
+ <p className="text-xs text-muted-foreground">
+ Applying a template replaces the current selection. You can adjust permissions before saving.
+ </p>
+ </div>
+ )}
  {catalogByModule.map(([module, entries]) => (
  <div key={module}>
  <p className="mb-2 text-sm font-semibold text-primary">{module}</p>
@@ -441,7 +605,7 @@ export function RBACPage() {
  className="h-11 w-full rounded-lg border bg-background px-3 text-sm outline-none focus:border-primary"
  id="roleTemplate"
  value={roleForm.templateId}
- onChange={(event) => setRoleForm((c) => ({ ...c, templateId: event.target.value }))}
+ onChange={(event) => applyTemplateToRoleForm(event.target.value)}
  >
  <option value="">No template</option>
  {templates.map((template) => (
@@ -450,6 +614,33 @@ export function RBACPage() {
  </option>
  ))}
  </select>
+ </div>
+ <div className="space-y-3 sm:col-span-2">
+ <Label>Permissions</Label>
+ {catalogByModule.map(([module, entries]) => (
+ <div key={module}>
+ <p className="mb-2 text-sm font-semibold text-primary">{module}</p>
+ <div className="grid gap-2 sm:grid-cols-2">
+ {entries.map((entry) => (
+ <label
+ className="flex cursor-pointer items-start gap-3 rounded-lg border bg-background p-3 text-sm hover:border-primary/40"
+ key={entry.key}
+ >
+ <input
+ checked={roleForm.permissionKeys.includes(entry.key)}
+ className="mt-0.5 h-4 w-4 accent-primary"
+ onChange={() => toggleRoleFormPermission(entry.key)}
+ type="checkbox"
+ />
+ <span>
+ <span className="block font-semibold">{entry.label}</span>
+ <span className="mt-1 block text-xs text-muted-foreground">{entry.description}</span>
+ </span>
+ </label>
+ ))}
+ </div>
+ </div>
+ ))}
  </div>
  </div>
  <Button className="mt-4" disabled={!roleForm.name} onClick={submitRole} type="button">
@@ -470,9 +661,23 @@ export function RBACPage() {
  <p className="font-semibold">{role.name}</p>
  <p className="text-xs text-muted-foreground">{role.permissionKeys.length} permissions</p>
  </div>
- <Button onClick={() => void removeRole(role)} size="icon" type="button" variant="outline">
+ <div className="flex items-center gap-2">
+ <Button
+ onClick={() => {
+ selectRoleForMatrix(role);
+ setActiveTab("matrix");
+ }}
+ size="sm"
+ type="button"
+ variant="outline"
+ >
+ <Pencil className="h-4 w-4" />
+ Edit
+ </Button>
+ <Button aria-label={`Delete ${role.name}`} onClick={() => void removeRole(role)} size="icon" type="button" variant="outline">
  <Trash2 className="h-4 w-4" />
  </Button>
+ </div>
  </CardContent>
  </Card>
  ))}
@@ -499,13 +704,13 @@ export function RBACPage() {
  <div className="space-y-4">
  <div className="flex items-center justify-between">
  <h2 className="text-lg font-bold">Role Templates</h2>
- <Button onClick={() => setShowTemplateForm((v) => !v)} type="button">
+ <Button onClick={startCreateTemplate} type="button">
  <Plus className="h-4 w-4" />
  Add Template
  </Button>
  </div>
  {showTemplateForm && (
- <SectionCard title="New Role Template">
+ <SectionCard title={editingTemplateId ? "Edit Role Template" : "New Role Template"}>
  <div className="grid gap-4 sm:grid-cols-2">
  <div className="space-y-2 sm:col-span-2">
  <Label htmlFor="templateName">Name</Label>
@@ -515,10 +720,42 @@ export function RBACPage() {
  <Label htmlFor="templateDescription">Description</Label>
  <Input id="templateDescription" value={templateForm.description} onChange={(event) => setTemplateForm((c) => ({ ...c, description: event.target.value }))} />
  </div>
+ <div className="space-y-3 sm:col-span-2">
+ <Label>Permissions</Label>
+ {catalogByModule.map(([module, entries]) => (
+ <div key={module}>
+ <p className="mb-2 text-sm font-semibold text-primary">{module}</p>
+ <div className="grid gap-2 sm:grid-cols-2">
+ {entries.map((entry) => (
+ <label
+ className="flex cursor-pointer items-start gap-3 rounded-lg border bg-background p-3 text-sm hover:border-primary/40"
+ key={entry.key}
+ >
+ <input
+ checked={templateForm.permissionKeys.includes(entry.key)}
+ className="mt-0.5 h-4 w-4 accent-primary"
+ onChange={() => toggleTemplatePermission(entry.key)}
+ type="checkbox"
+ />
+ <span>
+ <span className="block font-semibold">{entry.label}</span>
+ <span className="mt-1 block text-xs text-muted-foreground">{entry.description}</span>
+ </span>
+ </label>
+ ))}
  </div>
- <Button className="mt-4" disabled={!templateForm.name} onClick={submitTemplate} type="button">
- Create Template
+ </div>
+ ))}
+ </div>
+ </div>
+ <div className="mt-4 flex gap-2">
+ <Button disabled={!templateForm.name.trim() || savingTemplate} onClick={submitTemplate} type="button">
+ {savingTemplate ? "Saving..." : editingTemplateId ? "Save Changes" : "Create Template"}
  </Button>
+ <Button disabled={savingTemplate} onClick={closeTemplateForm} type="button" variant="outline">
+ Cancel
+ </Button>
+ </div>
  </SectionCard>
  )}
  {templates.length === 0 ? (
@@ -532,9 +769,15 @@ export function RBACPage() {
  <p className="font-semibold">{template.name}</p>
  <p className="text-xs text-muted-foreground">{template.permissionKeys.length} permissions</p>
  </div>
- <Button onClick={() => void removeTemplate(template)} size="icon" type="button" variant="outline">
+ <div className="flex items-center gap-2">
+ <Button onClick={() => startEditTemplate(template)} size="sm" type="button" variant="outline">
+ <Pencil className="h-4 w-4" />
+ Edit
+ </Button>
+ <Button aria-label={`Delete ${template.name}`} onClick={() => void removeTemplate(template)} size="icon" type="button" variant="outline">
  <Trash2 className="h-4 w-4" />
  </Button>
+ </div>
  </CardContent>
  </Card>
  ))}
@@ -547,13 +790,13 @@ export function RBACPage() {
  <div className="space-y-4">
  <div className="flex items-center justify-between">
  <h2 className="text-lg font-bold">Permission Groups</h2>
- <Button onClick={() => setShowGroupForm((v) => !v)} type="button">
+ <Button onClick={startCreateGroup} type="button">
  <Plus className="h-4 w-4" />
  Add Group
  </Button>
  </div>
  {showGroupForm && (
- <SectionCard title="New Permission Group">
+ <SectionCard title={editingGroupId ? "Edit Permission Group" : "New Permission Group"}>
  <div className="grid gap-4 sm:grid-cols-2">
  <div className="space-y-2 sm:col-span-2">
  <Label htmlFor="groupName">Name</Label>
@@ -563,10 +806,42 @@ export function RBACPage() {
  <Label htmlFor="groupDescription">Description</Label>
  <Input id="groupDescription" value={groupForm.description} onChange={(event) => setGroupForm((c) => ({ ...c, description: event.target.value }))} />
  </div>
+ <div className="space-y-3 sm:col-span-2">
+ <Label>Permissions</Label>
+ {catalogByModule.map(([module, entries]) => (
+ <div key={module}>
+ <p className="mb-2 text-sm font-semibold text-primary">{module}</p>
+ <div className="grid gap-2 sm:grid-cols-2">
+ {entries.map((entry) => (
+ <label
+ className="flex cursor-pointer items-start gap-3 rounded-lg border bg-background p-3 text-sm hover:border-primary/40"
+ key={entry.key}
+ >
+ <input
+ checked={groupForm.permissionKeys.includes(entry.key)}
+ className="mt-0.5 h-4 w-4 accent-primary"
+ onChange={() => toggleGroupPermission(entry.key)}
+ type="checkbox"
+ />
+ <span>
+ <span className="block font-semibold">{entry.label}</span>
+ <span className="mt-1 block text-xs text-muted-foreground">{entry.description}</span>
+ </span>
+ </label>
+ ))}
  </div>
- <Button className="mt-4" disabled={!groupForm.name} onClick={submitGroup} type="button">
- Create Group
+ </div>
+ ))}
+ </div>
+ </div>
+ <div className="mt-4 flex gap-2">
+ <Button disabled={!groupForm.name.trim() || savingGroup} onClick={submitGroup} type="button">
+ {savingGroup ? "Saving..." : editingGroupId ? "Save Changes" : "Create Group"}
  </Button>
+ <Button disabled={savingGroup} onClick={closeGroupForm} type="button" variant="outline">
+ Cancel
+ </Button>
+ </div>
  </SectionCard>
  )}
  {groups.length === 0 ? (
@@ -580,9 +855,15 @@ export function RBACPage() {
  <p className="font-semibold">{group.name}</p>
  <p className="text-xs text-muted-foreground">{group.permissionKeys.length} permissions</p>
  </div>
- <Button onClick={() => void removeGroup(group)} size="icon" type="button" variant="outline">
+ <div className="flex items-center gap-2">
+ <Button onClick={() => startEditGroup(group)} size="sm" type="button" variant="outline">
+ <Pencil className="h-4 w-4" />
+ Edit
+ </Button>
+ <Button aria-label={`Delete ${group.name}`} onClick={() => void removeGroup(group)} size="icon" type="button" variant="outline">
  <Trash2 className="h-4 w-4" />
  </Button>
+ </div>
  </CardContent>
  </Card>
  ))}

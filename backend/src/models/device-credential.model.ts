@@ -11,6 +11,10 @@ export type DeviceCredentialStatus =
 export type DeviceCredential = {
   deviceId: string;
 
+  organizationId?: string | null;
+
+  deviceBinding?: string | null;
+
   tokenHash: string;
 
   status:
@@ -39,6 +43,18 @@ export type DeviceCredential = {
   pendingIssuedAt?: Date | null;
 
   pendingExpiresAt?: Date | null;
+
+  recoveryAuthorizationHash?: string | null;
+
+  recoveryDeviceBinding?: string | null;
+
+  recoveryOrganizationId?: string | null;
+
+  recoveryRequestedBy?: string | null;
+
+  recoveryIssuedAt?: Date | null;
+
+  recoveryExpiresAt?: Date | null;
 };
 
 export type DeviceCredentialDocument =
@@ -54,6 +70,24 @@ const deviceCredentialSchema =
         index: true,
         trim: true,
         maxlength: 100,
+      },
+
+      organizationId: {
+        type: String,
+        default: null,
+        trim: true,
+        maxlength: 100,
+        index: true,
+      },
+
+      deviceBinding: {
+        type: String,
+        default: null,
+        trim: true,
+        lowercase: true,
+        minlength: 64,
+        maxlength: 64,
+        index: true,
       },
 
       tokenHash: {
@@ -141,6 +175,48 @@ const deviceCredentialSchema =
       },
 
       pendingExpiresAt: {
+        type: Date,
+        default: null,
+        index: true,
+      },
+
+      recoveryAuthorizationHash: {
+        type: String,
+        default: null,
+        minlength: 64,
+        maxlength: 64,
+        select: false,
+      },
+
+      recoveryDeviceBinding: {
+        type: String,
+        default: null,
+        trim: true,
+        lowercase: true,
+        minlength: 64,
+        maxlength: 64,
+      },
+
+      recoveryOrganizationId: {
+        type: String,
+        default: null,
+        trim: true,
+        maxlength: 100,
+      },
+
+      recoveryRequestedBy: {
+        type: String,
+        default: null,
+        trim: true,
+        maxlength: 100,
+      },
+
+      recoveryIssuedAt: {
+        type: Date,
+        default: null,
+      },
+
+      recoveryExpiresAt: {
         type: Date,
         default: null,
         index: true,

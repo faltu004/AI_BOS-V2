@@ -1,4 +1,4 @@
-export type TaskStatus = "Todo" | "In Progress" | "Review" | "Testing" | "Completed";
+export type TaskStatus = "Todo" | "In Progress" | "Blocked" | "Review" | "Testing" | "Completed";
 export type TaskPriority = "Low" | "Medium" | "High" | "Critical";
 export type TaskIssueType = "Epic" | "Story" | "Task" | "Subtask" | "Bug";
 export type TaskView = "kanban" | "backlog" | "hierarchy" | "list" | "calendar" | "timeline";
@@ -43,6 +43,9 @@ export type Task = {
  description: string;
  issueType?: TaskIssueType;
  status: TaskStatus;
+ progress: number;
+ remaining: number;
+ blockedReason?: string;
  priority: TaskPriority;
  projectId?: string;
  epicId?: string;
@@ -72,7 +75,7 @@ export type Task = {
 
 export type TaskFormInput = Omit<
  Task,
-"id" | "taskCode" | "activityLogs" | "timeEntries" | "createdAt" | "updatedAt" | "assigneeId" | "reporterId"
+"id" | "taskCode" | "remaining" | "activityLogs" | "timeEntries" | "createdAt" | "updatedAt" | "assigneeId" | "reporterId"
 > & {
  taskCode?: string;
 };

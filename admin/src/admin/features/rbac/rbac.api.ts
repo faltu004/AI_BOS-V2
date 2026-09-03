@@ -81,6 +81,13 @@ export function createPermissionGroup(input: PermissionGroupFormInput, token?: s
  });
 }
 
+export function updatePermissionGroup(id: string, input: PermissionGroupFormInput, token?: string) {
+ return request<PermissionGroup>(`/rbac/permission-groups/${id}`, token, {
+ method: "PATCH",
+ body: JSON.stringify(input),
+ });
+}
+
 export function deletePermissionGroup(id: string, token?: string) {
  return request<{ deleted: boolean }>(`/rbac/permission-groups/${id}`, token, { method: "DELETE" });
 }
@@ -92,6 +99,13 @@ export function fetchRoleTemplates(token?: string) {
 export function createRoleTemplate(input: RoleTemplateFormInput, token?: string) {
  return request<RoleTemplate>("/rbac/role-templates", token, {
  method: "POST",
+ body: JSON.stringify(input),
+ });
+}
+
+export function updateRoleTemplate(id: string, input: RoleTemplateFormInput, token?: string) {
+ return request<RoleTemplate>(`/rbac/role-templates/${id}`, token, {
+ method: "PATCH",
  body: JSON.stringify(input),
  });
 }

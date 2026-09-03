@@ -14,8 +14,9 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getStoredAuthSession, isSessionExpired, refreshSession } from "@shared/auth/auth-service";
-import { cn } from "@shared/lib/utils";
+import { cn, getInitials } from "@shared/lib/utils";
 import { formatDateTime } from "@shared/lib/utils-helpers";
+import { Avatar } from "@shared/ui/avatar";
 import { Button } from "@shared/ui/button";
 import { Card } from "@shared/ui/card";
 import { EmptyState } from "@shared/ui/empty-state";
@@ -57,6 +58,40 @@ const roomTypeIcons: Record<CollaborationRoom["roomType"], typeof Hash> = {
 function formatTime(iso?: string) {
  if (!iso) return "";
  return formatDateTime(iso);
+}
+
+function isSameDay(isoA: string, isoB: string) {
+ const a = new Date(isoA);
+ const b = new Date(isoB);
+ return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function formatDayLabel(iso: string) {
+ const today = new Date();
+ const yesterday = new Date();
+ yesterday.setDate(today.getDate() - 1);
+ if (isSameDay(iso, today.toISOString())) return "Today";
+ if (isSameDay(iso, yesterday.toISOString())) return "Yesterday";
+ return new Date(iso).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+}
+
+function shouldGroupWithPrevious(current: CollaborationMessage, previous?: CollaborationMessage) {
+ if (!previous) return false;
+ if (!sameId(current.authorId, previous.authorId)) return false;
+ if (!isSameDay(current.createdAt, previous.createdAt)) return false;
+ return new Date(current.createdAt).getTime() - new Date(previous.createdAt).getTime() < 5 * 60 * 1000;
+}
+
+function formatRelativeShort(iso: string): string {
+ const diffMs = Date.now() - new Date(iso).getTime();
+ const minutes = Math.floor(diffMs / 60000);
+ if (minutes < 1) return "now";
+ if (minutes < 60) return `${minutes}m`;
+ const hours = Math.floor(minutes / 60);
+ if (hours < 24) return `${hours}h`;
+ const days = Math.floor(hours / 24);
+ if (days < 7) return `${days}d`;
+ return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 function groupRooms(rooms: CollaborationRoom[]) {
@@ -136,19 +171,53 @@ export function CollaborationHub() {
  const [searchQuery, setSearchQuery] = useState("");
  const [searchResults, setSearchResults] = useState<CollaborationMessage[] | null>(null);
  const [loading, setLoading] = useState(true);
+ const [typingUserIds, setTypingUserIds] = useState<string[]>([]);
  const messageListRef = useRef<HTMLDivElement | null>(null);
  const selectedRoomIdRef = useRef<string | null>(selectedRoomId);
+ const typingExpiryRef = useRef<Map<string, number>>(new Map());
+ const typingSendTimeoutRef = useRef<number | null>(null);
 
  const selectedRoom = rooms.find((room) => room._id === selectedRoomId) ?? null;
  const directoryById = useMemo(() => new Map(directory.map((user) => [user._id, user])), [directory]);
+ const selectedRoomOtherParticipant = useMemo(() => {
+ if (!selectedRoom || selectedRoom.roomType !== "direct") return null;
+ return (
+ directory.find(
+ (user) => selectedRoom.participantIds.some((id) => sameId(id, user._id)) && !sameId(user._id, currentUserId),
+ ) ?? null
+ );
+ }, [selectedRoom, directory, currentUserId]);
 
  useEffect(() => {
  selectedRoomIdRef.current = selectedRoomId;
  }, [selectedRoomId]);
 
- const { socket, joinRoom, sendMessage: sendMessageSocket, react, pin, updateNote: updateNoteSocket } = useCollaborationSocket(token, {
+ function addTypingUser(userId: string) {
+ setTypingUserIds((current) => (current.includes(userId) ? current : [...current, userId]));
+ const existing = typingExpiryRef.current.get(userId);
+ if (existing) window.clearTimeout(existing);
+ typingExpiryRef.current.set(userId, window.setTimeout(() => removeTypingUser(userId), 4000));
+ }
+
+ function removeTypingUser(userId: string) {
+ setTypingUserIds((current) => current.filter((id) => id !== userId));
+ const existing = typingExpiryRef.current.get(userId);
+ if (existing) window.clearTimeout(existing);
+ typingExpiryRef.current.delete(userId);
+ }
+
+ function clearAllTypingUsers() {
+ typingExpiryRef.current.forEach((timeout) => window.clearTimeout(timeout));
+ typingExpiryRef.current.clear();
+ setTypingUserIds([]);
+ }
+
+ const { socket, joinRoom, sendMessage: sendMessageSocket, react, pin, updateNote: updateNoteSocket, typingStart, typingStop } = useCollaborationSocket(token, {
  onMessageNew(message) {
  const isSelectedRoom = sameId(message.roomId, selectedRoomIdRef.current);
+ if (isSelectedRoom && token) {
+ void markRoomRead(message.roomId, token).catch(() => undefined);
+ }
  setMessages((current) => (isSelectedRoom ? mergeMessageList(current, message) : current));
  setRooms((current) =>
  sortRoomsByActivity(
@@ -178,6 +247,16 @@ export function CollaborationHub() {
  setNoteDraft(updated.body);
  }
  },
+ onTypingStart({ userId, roomId }) {
+ if (sameId(roomId, selectedRoomIdRef.current) && !sameId(userId, currentUserId)) {
+ addTypingUser(toId(userId));
+ }
+ },
+ onTypingStop({ userId, roomId }) {
+ if (sameId(roomId, selectedRoomIdRef.current)) {
+ removeTypingUser(toId(userId));
+ }
+ },
  });
 
  function mergeSentMessage(message: CollaborationMessage) {
@@ -197,6 +276,15 @@ export function CollaborationHub() {
  ),
  );
  }
+
+ useEffect(() => {
+ return () => {
+ typingExpiryRef.current.forEach((timeout) => window.clearTimeout(timeout));
+ if (typingSendTimeoutRef.current) window.clearTimeout(typingSendTimeoutRef.current);
+ if (selectedRoomIdRef.current) typingStop(selectedRoomIdRef.current);
+ };
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, []);
 
  useEffect(() => {
  if (!session) {
@@ -259,10 +347,18 @@ export function CollaborationHub() {
  const roomId = selectedRoomId;
  let cancelled = false;
 
+ setComposerText("");
+ setMentionQuery(null);
+ if (typingSendTimeoutRef.current) {
+ window.clearTimeout(typingSendTimeoutRef.current);
+ typingSendTimeoutRef.current = null;
+ }
+
  setMessages([]);
  setPinnedMessages([]);
  setNote(null);
  setNoteDraft("");
+ clearAllTypingUsers();
 
  joinRoom(roomId).catch(() => undefined);
 
@@ -295,6 +391,11 @@ export function CollaborationHub() {
 
  return () => {
  cancelled = true;
+ typingStop(roomId);
+ if (typingSendTimeoutRef.current) {
+ window.clearTimeout(typingSendTimeoutRef.current);
+ typingSendTimeoutRef.current = null;
+ }
  };
  // eslint-disable-next-line react-hooks/exhaustive-deps
  }, [selectedRoomId, token]);
@@ -312,6 +413,9 @@ export function CollaborationHub() {
  const messageList = await fetchMessages(selectedRoomId!, token);
  if (!cancelled) {
  setMessages((current) => mergeMessageLists(current, messageList));
+ if (document.visibilityState === "visible") {
+ void markRoomRead(selectedRoomId!, token).catch(() => undefined);
+ }
  }
  } catch {
  // Realtime remains the primary path; polling is only a silent safety net.
@@ -366,10 +470,34 @@ export function CollaborationHub() {
 
  const grouped = useMemo(() => groupRooms(rooms), [rooms]);
 
+ const typingLabel = useMemo(() => {
+ const names = typingUserIds.map((id) => directoryById.get(id)?.fullName).filter((name): name is string => Boolean(name));
+ if (names.length === 0) return null;
+ if (names.length === 1) return `${names[0]} is typing...`;
+ if (names.length === 2) return `${names[0]} and ${names[1]} are typing...`;
+ return `${names.length} people are typing...`;
+ }, [typingUserIds, directoryById]);
+
  function handleComposerChange(value: string) {
  setComposerText(value);
  const trailingMention = value.match(/@([a-zA-Z0-9 ]{0,40})$/);
  setMentionQuery(trailingMention ? trailingMention[1].toLowerCase() : null);
+
+ if (!selectedRoomId) return;
+ typingStart(selectedRoomId);
+ if (typingSendTimeoutRef.current) window.clearTimeout(typingSendTimeoutRef.current);
+ typingSendTimeoutRef.current = window.setTimeout(() => {
+ typingStop(selectedRoomId);
+ typingSendTimeoutRef.current = null;
+ }, 2500);
+ }
+
+ function stopComposerTyping() {
+ if (typingSendTimeoutRef.current) {
+ window.clearTimeout(typingSendTimeoutRef.current);
+ typingSendTimeoutRef.current = null;
+ }
+ if (selectedRoomId) typingStop(selectedRoomId);
  }
 
  function insertMention(user: DirectoryUser) {
@@ -380,6 +508,7 @@ export function CollaborationHub() {
 
  async function handleSend() {
  if (!selectedRoomId || !composerText.trim()) return;
+ stopComposerTyping();
  try {
  const text = composerText.trim();
  const message = await sendMessageSocket(selectedRoomId, text, []);
@@ -477,7 +606,14 @@ export function CollaborationHub() {
  }
 
  if (loading) {
- return <div className="p-6 text-sm text-muted-foreground">Loading company messenger...</div>;
+  return (
+  <div className="flex h-[calc(100dvh-4rem)] items-center justify-center">
+  <div className="flex flex-col items-center gap-3 text-muted-foreground">
+  <MessageSquare className="h-8 w-8 animate-pulse" />
+  <p className="text-sm">Loading company messenger...</p>
+  </div>
+  </div>
+  );
  }
 
  if (!token) {
@@ -578,6 +714,16 @@ export function CollaborationHub() {
  <div className="space-y-0.5">
  {list.map((room) => {
  const Icon = roomTypeIcons[room.roomType];
+ const otherParticipant =
+ room.roomType === "direct"
+ ? directory.find(
+ (user) => room.participantIds.some((id) => sameId(id, user._id)) && !sameId(user._id, currentUserId),
+ )
+ : undefined;
+ const previewText = room.lastMessage
+ ? room.lastMessage.body.trim() || "Sent an attachment"
+ : "No messages yet";
+ const previewTime = room.lastMessage?.createdAt ?? room.lastMessageAt;
  return (
  <button
  key={room._id}
@@ -587,18 +733,38 @@ export function CollaborationHub() {
  setMobilePanel("chat");
  }}
  className={cn(
- "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors",
+ "flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left text-sm transition-colors",
  room._id === selectedRoomId ? "bg-primary/10 text-primary" : "hover:bg-muted",
  )}
  aria-label={`Open ${room.name}`}
  >
- <Icon className="h-4 w-4 shrink-0" />
- <span className="flex-1 truncate">{room.name}</span>
+ {otherParticipant ? (
+ <Avatar
+ value={getInitials(otherParticipant.fullName)}
+ name={otherParticipant.fullName}
+ className="h-9 w-9 shrink-0 rounded-full text-xs"
+ />
+ ) : (
+ <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+ <Icon className="h-4 w-4" />
+ </span>
+ )}
+ <span className="min-w-0 flex-1">
+ <span className="flex items-center justify-between gap-2">
+ <span className={cn("truncate", room.unreadCount > 0 ? "font-semibold" : "font-medium")}>{room.name}</span>
+ {previewTime && (
+ <span className="shrink-0 text-[10px] text-muted-foreground">{formatRelativeShort(previewTime)}</span>
+ )}
+ </span>
+ <span className="flex items-center justify-between gap-2">
+ <span className="truncate text-xs text-muted-foreground">{previewText}</span>
  {room.unreadCount > 0 && (
- <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground">
+ <span className="shrink-0 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground">
  {room.unreadCount}
  </span>
  )}
+ </span>
+ </span>
  </button>
  );
  })}
@@ -620,8 +786,9 @@ export function CollaborationHub() {
  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted"
  aria-label={`Start direct message with ${user.fullName}`}
  >
- <Plus className="h-3.5 w-3.5" />
- <span className="truncate">{user.fullName}</span>
+ <Avatar value={getInitials(user.fullName)} name={user.fullName} className="h-6 w-6 shrink-0 rounded-full text-[10px]" />
+ <span className="flex-1 truncate">{user.fullName}</span>
+ <Plus className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
  </button>
  ))}
  </div>
@@ -640,11 +807,27 @@ export function CollaborationHub() {
  ) : (
  <>
  <div className="flex items-center justify-between border-b p-4">
+ <div className="flex min-w-0 items-center gap-2.5">
+ {selectedRoomOtherParticipant ? (
+ <Avatar
+ value={getInitials(selectedRoomOtherParticipant.fullName)}
+ name={selectedRoomOtherParticipant.fullName}
+ className="h-9 w-9 shrink-0 rounded-full text-xs"
+ />
+ ) : (
+ <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+ {(() => {
+ const HeaderIcon = roomTypeIcons[selectedRoom.roomType];
+ return <HeaderIcon className="h-4 w-4" />;
+ })()}
+ </span>
+ )}
  <div className="min-w-0">
- <p className="font-semibold">{selectedRoom.name}</p>
+ <p className="truncate font-semibold">{selectedRoom.name}</p>
  <p className="text-xs text-muted-foreground">
  {selectedRoom.roomType === "direct" ? "Private direct message" : `${selectedRoom.roomType} conversation`}
  </p>
+ </div>
  </div>
  <div className="flex shrink-0 items-center gap-2">
  {pinnedMessages.length > 0 && (
@@ -659,32 +842,53 @@ export function CollaborationHub() {
  </div>
  </div>
 
- <div ref={messageListRef} className="flex-1 space-y-4 overflow-y-auto p-3 sm:p-4">
+ <div ref={messageListRef} className="flex-1 overflow-y-auto p-3 sm:p-4">
  {messages.length === 0 && (
  <EmptyState icon={MessageSquare} title="No messages yet" description="Say hello to get the conversation going." />
  )}
- {messages.map((message) => {
+ {messages.map((message, index) => {
  const isOwn = sameId(message.authorId, currentUserId);
+ const previousMessage = messages[index - 1];
+ const isGrouped = shouldGroupWithPrevious(message, previousMessage);
+ const showDateSeparator = !previousMessage || !isSameDay(message.createdAt, previousMessage.createdAt);
+ const authorName = getAuthorName(message.authorId);
  const reactionCounts = message.reactions.reduce<Record<string, number>>((acc, reaction) => {
  acc[reaction.emoji] = (acc[reaction.emoji] ?? 0) + 1;
  return acc;
  }, {});
 
  return (
- <div
- key={message._id}
- className={cn("group flex flex-col gap-1", isOwn ? "items-end" : "items-start")}
- >
- <div className={cn("flex items-center gap-2 text-xs text-muted-foreground", isOwn && "justify-end")}>
- <span className="font-medium text-foreground">{getAuthorName(message.authorId)}</span>
+ <div key={message._id}>
+ {showDateSeparator && (
+ <div className="my-4 flex items-center gap-3" role="separator">
+ <span className="h-px flex-1 bg-border" />
+ <span className="shrink-0 text-[11px] font-medium text-muted-foreground">{formatDayLabel(message.createdAt)}</span>
+ <span className="h-px flex-1 bg-border" />
+ </div>
+ )}
+ <div className={cn("group flex items-end gap-2", isOwn ? "flex-row-reverse" : "flex-row", isGrouped ? "mt-0.5" : "mt-2")}>
+ {!isOwn && (
+ <Avatar
+ value={getInitials(authorName)}
+ name={authorName}
+ className={cn("h-7 w-7 shrink-0 rounded-full text-[10px]", isGrouped && "invisible")}
+ />
+ )}
+ <div className={cn("flex max-w-[85%] flex-col gap-1 sm:max-w-2xl", isOwn ? "items-end" : "items-start")}>
+ {!isGrouped && (
+ <div className={cn("flex items-center gap-2 px-1 text-xs text-muted-foreground", isOwn && "justify-end")}>
+ <span className="font-medium text-foreground">{authorName}</span>
  <span>{formatTime(message.createdAt)}</span>
  {message.isPinned && <Pin className="h-3 w-3 text-primary" />}
  </div>
- <p
- className={cn(
- "max-w-[85%] break-words rounded-lg px-3 py-2 text-sm sm:max-w-2xl",
- isOwn ? "rounded-br-sm bg-primary/10 text-foreground" : "rounded-bl-sm bg-muted",
  )}
+ <p
+  className={cn(
+  "break-words rounded-2xl px-3.5 py-2 text-sm leading-relaxed shadow-sm",
+  isOwn
+  ? "rounded-br-md bg-primary text-primary-foreground"
+  : "rounded-bl-md bg-muted text-foreground",
+  )}
  >
  {renderBody(message.body, directory)}
  </p>
@@ -748,24 +952,38 @@ export function CollaborationHub() {
  </div>
  )}
  </div>
+ </div>
+ </div>
  );
  })}
  </div>
 
- <div className="relative border-t p-2 sm:p-3">
+  <div className="relative border-t bg-background/95 p-2 backdrop-blur-sm sm:p-3">
+  {typingLabel && (
+  <div className="flex items-center gap-1.5 px-1 pb-1.5">
+  <span className="flex gap-0.5">
+  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary" style={{ animationDelay: '0ms' }} />
+  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary" style={{ animationDelay: '150ms' }} />
+  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary" style={{ animationDelay: '300ms' }} />
+  </span>
+  <p className="text-xs italic text-muted-foreground">{typingLabel}</p>
+  </div>
+  )}
  {mentionSuggestions.length > 0 && (
- <div className="absolute bottom-full left-3 mb-1 w-56 rounded-md border bg-popover p-1 shadow-lg">
- {mentionSuggestions.map((user) => (
- <button
- key={user._id}
- type="button"
- onClick={() => insertMention(user)}
- className="flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs hover:bg-muted"
- >
- <AtSign className="h-3 w-3" /> {user.fullName}
- </button>
- ))}
- </div>
+  <div className="absolute bottom-full left-3 mb-1 w-64 rounded-xl border bg-popover p-1.5 shadow-xl">
+  <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Mention</p>
+  {mentionSuggestions.map((user) => (
+  <button
+  key={user._id}
+  type="button"
+  onClick={() => insertMention(user)}
+  className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-xs hover:bg-muted"
+  >
+  <Avatar value={getInitials(user.fullName)} name={user.fullName} className="h-6 w-6 shrink-0 rounded-full text-[10px]" />
+  <span className="flex-1 truncate font-medium">{user.fullName}</span>
+  </button>
+  ))}
+  </div>
  )}
  <div className="flex items-center gap-1.5 sm:gap-2">
  <label className="cursor-pointer rounded-md p-2 hover:bg-muted">
@@ -780,18 +998,25 @@ export function CollaborationHub() {
  }}
  />
  </label>
- <Input
- value={composerText}
- onChange={(event) => handleComposerChange(event.target.value)}
- onKeyDown={(event) => {
- if (event.key === "Enter" && !event.shiftKey) {
- event.preventDefault();
- void handleSend();
- }
- }}
- placeholder="Message... use @ to mention someone"
- />
- <Button size="icon" onClick={handleSend} aria-label="Send message">
+  <Input
+  value={composerText}
+  onChange={(event) => handleComposerChange(event.target.value)}
+  onKeyDown={(event) => {
+  if (event.key === "Enter" && !event.shiftKey) {
+  event.preventDefault();
+  void handleSend();
+  }
+  }}
+  placeholder="Message... use @ to mention someone"
+  className="rounded-xl bg-muted/50 focus-visible:ring-primary"
+  />
+  <Button
+  size="icon"
+  onClick={handleSend}
+  disabled={!composerText.trim()}
+  aria-label="Send message"
+  className="shrink-0 rounded-xl"
+  >
  <Send className="h-4 w-4" />
  </Button>
  </div>

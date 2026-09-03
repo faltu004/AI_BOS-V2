@@ -7,7 +7,7 @@ export const createRoleSchema = z.object({
   name: z.string().min(2).max(80),
   description: z.string().max(500).optional(),
   rank: z.number().int().min(0).max(100).default(10),
-  permissionKeys: z.array(permissionKeySchema).default([]),
+  permissionKeys: z.array(permissionKeySchema).optional(),
   templateId: z.string().min(1).optional(),
 });
 

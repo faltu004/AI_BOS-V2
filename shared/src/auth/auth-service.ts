@@ -17,6 +17,7 @@ type LoginResponse = {
  email: string;
  role: AuthRole | "Admin" | "CEO";
  fullName: string;
+ permissions?: string[];
  companyName?: string;
  isProfileComplete?: boolean;
  mustChangePassword?: boolean;
@@ -49,6 +50,7 @@ function normalizeSession(session: JwtReadySession): JwtReadySession {
  // retroactively locked out until their next real login/refresh.
  isProfileComplete: session.user.isProfileComplete ?? true,
  mustChangePassword: session.user.mustChangePassword ?? false,
+ permissions: session.user.permissions ?? [],
  },
  };
 }
@@ -127,25 +129,26 @@ export async function login(email: string, password: string, rememberMe: boolean
  throw new Error(json?.message ?? "Unable to sign in. Please try again.");
  }
 
- const data = json.data as LoginResponse;
- const session: JwtReadySession = {
- accessToken: data.tokens.accessToken,
- refreshToken: data.tokens.refreshToken,
- tokenType: data.tokens.tokenType,
- expiresIn: data.tokens.expiresIn,
- user: {
- email: data.user.email,
- role: normalizeAuthRole(data.user.role),
- fullName: data.user.fullName,
- isProfileComplete: data.user.isProfileComplete ?? true,
- companyName: data.user.companyName,
- mustChangePassword: data.user.mustChangePassword ?? false,
- hasActiveFaceEnrollment: data.user.hasActiveFaceEnrollment,
- avatar: data.user.avatar,
- },
- };
+  const data = json.data as LoginResponse;
+  const session: JwtReadySession = {
+    accessToken: data.tokens.accessToken,
+    refreshToken: data.tokens.refreshToken,
+    tokenType: data.tokens.tokenType,
+    expiresIn: data.tokens.expiresIn,
+    user: {
+      email: data.user.email,
+      role: normalizeAuthRole(data.user.role),
+      fullName: data.user.fullName,
+      permissions: data.user.permissions ?? [],
+      isProfileComplete: data.user.isProfileComplete ?? true,
+      companyName: data.user.companyName,
+      mustChangePassword: data.user.mustChangePassword ?? false,
+      hasActiveFaceEnrollment: data.user.hasActiveFaceEnrollment,
+      avatar: data.user.avatar,
+    },
+  };
 
- return persistSession(session, rememberMe);
+  return persistSession(session, rememberMe);
 }
 
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
@@ -185,6 +188,17 @@ export function getStoredAuthSession(): JwtReadySession | null {
 }
 
 export function clearAuthSession() {
+ const session = getStoredAuthSession();
+
+ if (session) {
+ void window.electronAPI
+ ?.ensureDeviceEnrollment?.(
+ session.accessToken,
+ false,
+ )
+ .catch(() => undefined);
+ }
+
  localStorage.removeItem("ai_bos_auth_session");
  sessionStorage.removeItem("ai_bos_auth_session");
  clearRoleSensitiveBrowserState();
@@ -246,6 +260,7 @@ async function performRefresh(): Promise<JwtReadySession | null> {
  email: data.user.email,
  role: normalizeAuthRole(data.user.role),
  fullName: data.user.fullName,
+ permissions: data.user.permissions ?? current.user.permissions ?? [],
  isProfileComplete: data.user.isProfileComplete ?? true,
  companyName: data.user.companyName,
  mustChangePassword: data.user.mustChangePassword ?? false,

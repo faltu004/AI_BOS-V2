@@ -8,8 +8,8 @@ import {
 } from "../services/device-enrollment.service.js";
 
 import {
-  deviceEnrollmentTokenService,
-} from "../services/device-enrollment-token.service.js";
+  auditLogService,
+} from "../services/audit-log.service.js";
 
 function getClientIp(
   req: Request,
@@ -57,6 +57,18 @@ export class DeviceEnrollmentController {
       req,
       res,
     ) => {
+      const enrollmentCredential =
+        res.locals
+          .deviceEnrollmentCredential as
+          | {
+              type?: string;
+              tokenHash?: string;
+              createdBy?: string;
+              organizationId?: string;
+              deviceBinding?: string;
+            }
+          | undefined;
+
       const result =
         await deviceEnrollmentService
           .enroll({
@@ -72,29 +84,49 @@ export class DeviceEnrollmentController {
               getClientIp(
                 req,
               ),
+          }, {
+            organizationId:
+              enrollmentCredential
+                ?.organizationId,
+            deviceBinding:
+              enrollmentCredential
+                ?.deviceBinding,
           });
-
-      const enrollmentCredential =
-        res.locals
-          .deviceEnrollmentCredential as
-          | {
-              type?: string;
-              tokenHash?: string;
-            }
-          | undefined;
 
       if (
         enrollmentCredential
           ?.type ===
-          "one-time" &&
-        enrollmentCredential
-          .tokenHash
+          "one-time"
       ) {
-        await deviceEnrollmentTokenService
-          .consume(
+        await auditLogService.record({
+          actorUserId:
             enrollmentCredential
-              .tokenHash,
-          );
+              .createdBy,
+          category:
+            "device_update",
+          method: "POST",
+          path:
+            "/devices/enroll",
+          resourceType:
+            "managed_device",
+          resourceId:
+            result.device
+              .deviceId,
+          statusCode: 201,
+          success: true,
+          ipAddress:
+            getClientIp(req),
+          metadata: {
+            organizationId:
+              enrollmentCredential
+                .organizationId,
+            deviceBinding:
+              enrollmentCredential
+                .deviceBinding,
+            enrollmentType:
+              "authenticated_one_time",
+          },
+        });
       }
 
       /*

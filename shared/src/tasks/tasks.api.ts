@@ -2,7 +2,7 @@ import { getStoredAuthSession, isSessionExpired, refreshSession } from "@shared/
 import { getApiBaseUrl } from "@shared/lib/env";
 import { notifyLocalDataChanged } from "@shared/realtime/data-sync";
 
-export type TaskStatus = "Todo" | "In Progress" | "Review" | "Testing" | "Completed";
+export type TaskStatus = "Todo" | "In Progress" | "Blocked" | "Review" | "Testing" | "Completed";
 export type TaskPriority = "Low" | "Medium" | "High" | "Critical";
 export type TaskIssueType = "Epic" | "Story" | "Task" | "Subtask" | "Bug";
 
@@ -27,6 +27,9 @@ export type BackendTask = {
  description?: string;
  issueType?: TaskIssueType;
  status: TaskStatus;
+ progress?: number;
+ remaining?: number;
+ blockedReason?: string;
  priority: TaskPriority;
  projectId?: string;
  epicId?: string;
@@ -122,6 +125,12 @@ function userRefId(ref: BackendTaskUserRef | undefined): string | undefined {
  */
 export function toTask(record: BackendTask) {
  const id = record.id ?? record._id ?? "";
+ const checklistProgress = record.checklist.length > 0
+ ? Math.round((record.checklist.filter((item) => item.done).length / record.checklist.length) * 100)
+ : undefined;
+ const progress = record.status === "Completed"
+ ? 100
+ : Math.max(0, Math.min(100, record.progress ?? checklistProgress ?? 0));
  return {
  id,
  taskCode: record.taskCode,
@@ -129,6 +138,9 @@ export function toTask(record: BackendTask) {
  description: record.description ?? "",
  issueType: record.issueType ?? "Task",
  status: record.status,
+ progress,
+ remaining: record.remaining ?? 100 - progress,
+ blockedReason: record.blockedReason,
  priority: record.priority,
  projectId: record.projectId,
  epicId: record.epicId,

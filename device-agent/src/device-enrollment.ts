@@ -17,6 +17,11 @@ import {
 } from "./device-bootstrap-provisioning.js";
 
 import {
+  deriveDeviceBinding,
+  deriveDeviceFingerprint,
+} from "./device-binding.js";
+
+import {
   getDeviceAuthHeaders,
 } from "./device-auth.js";
 
@@ -88,6 +93,10 @@ export class DeviceEnrollmentRequiredError extends Error {
 
   constructor(
     message: string,
+    public readonly reason:
+      | "invalid_stored_credential"
+      | "bootstrap_required" =
+        "bootstrap_required",
   ) {
     super(
       message,
@@ -187,6 +196,7 @@ async function discardBootstrapCredentialIfPresent():
 
 type EnrollmentBootstrapCredential = {
   key: string;
+  deviceBinding?: string | undefined;
   source:
     | "environment"
     | "protected-bootstrap-file"
@@ -218,6 +228,9 @@ async function enrollmentKey():
       key:
         bootstrapCredential
           .enrollmentKey,
+      deviceBinding:
+        bootstrapCredential
+          .deviceBinding,
       source:
         "protected-bootstrap-file",
     };
@@ -251,28 +264,6 @@ async function enrollmentKey():
       legacyBootstrap
         ? "environment"
         : "none",
-  };
-}
-
-async function protectedBootstrapEnrollmentKey():
-  Promise<EnrollmentBootstrapCredential> {
-  const bootstrapCredential =
-    await loadBootstrapEnrollmentCredential();
-
-  if (!bootstrapCredential) {
-    return {
-      key: "",
-      source:
-        "none",
-    };
-  }
-
-  return {
-    key:
-      bootstrapCredential
-        .enrollmentKey,
-    source:
-      "protected-bootstrap-file",
   };
 }
 
@@ -349,6 +340,27 @@ async function enrollAndPersistDeviceCredential(
   const inventory =
     await getInventory();
 
+  const fingerprint =
+    deriveDeviceFingerprint(
+      inventory,
+    );
+
+  const deviceBinding =
+    deriveDeviceBinding(
+      fingerprint,
+    );
+
+  if (
+    bootstrap.deviceBinding &&
+    bootstrap.deviceBinding !==
+      deviceBinding
+  ) {
+    await discardBootstrapCredentialIfPresent();
+    throw new DeviceEnrollmentRequiredError(
+      "DEVICE_ENROLLMENT_REQUIRED: protected bootstrap is bound to a different device",
+    );
+  }
+
   let response;
 
   try {
@@ -365,6 +377,10 @@ async function enrollAndPersistDeviceCredential(
 
           appVersion:
             AGENT_VERSION,
+
+          fingerprint,
+
+          deviceBinding,
         },
         {
           headers: {
@@ -380,6 +396,25 @@ async function enrollAndPersistDeviceCredential(
         },
       );
   } catch (error) {
+    if (
+      bootstrap.source ===
+        "protected-bootstrap-file" &&
+      axios.isAxiosError(
+        error,
+      ) &&
+      (
+        error.response?.status ===
+          401 ||
+        error.response?.status ===
+          403
+      )
+    ) {
+      await discardBootstrapCredentialIfPresent();
+      throw new DeviceEnrollmentRequiredError(
+        "DEVICE_ENROLLMENT_REQUIRED: protected bootstrap was rejected or expired",
+      );
+    }
+
     if (
       axios.isAxiosError(
         error,
@@ -475,7 +510,7 @@ export async function ensurePerDeviceCredential():
 
 export async function prepareDeviceIdentity():
   Promise<string> {
-  let credential =
+  const credential =
     await ensurePerDeviceCredential();
 
   try {
@@ -492,11 +527,13 @@ export async function prepareDeviceIdentity():
     }
   }
 
-  credential =
-    await recoverFromInvalidDeviceAuthentication();
+  console.warn(
+    "[Device Auth] Stored device credential was rejected by the backend; refusing implicit initial-enrollment replacement.",
+  );
 
-  return registerDeviceIdentity(
-    credential,
+  throw new DeviceEnrollmentRequiredError(
+    "DEVICE_ENROLLMENT_REQUIRED: stored device credential was rejected; explicit authorized credential recovery is required",
+    "invalid_stored_credential",
   );
 }
 
@@ -568,28 +605,4 @@ async function registerDeviceIdentity(
   );
 
   return credential.deviceId;
-}
-
-async function recoverFromInvalidDeviceAuthentication():
-  Promise<StoredDeviceCredential> {
-  console.warn(
-    "[Device Auth] Stored device credential was rejected by the backend; protected bootstrap re-enrollment is required.",
-  );
-
-  const bootstrap =
-    await protectedBootstrapEnrollmentKey();
-
-  if (!bootstrap.key) {
-    throw new DeviceEnrollmentRequiredError(
-      "DEVICE_ENROLLMENT_REQUIRED: stored device credential was rejected and no protected bootstrap enrollment artifact is available",
-    );
-  }
-
-  console.warn(
-    "[Device Auth] Protected bootstrap enrollment artifact found; re-enrolling this device.",
-  );
-
-  return enrollAndPersistDeviceCredential(
-    bootstrap,
-  );
 }

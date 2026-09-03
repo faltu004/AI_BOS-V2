@@ -27,6 +27,8 @@ export type Task = {
   taskCode: string;
   issueType: TaskIssueType;
   status: TaskStatus;
+  progress: number;
+  blockedReason?: string;
   priority: TaskPriority;
   projectId?: Types.ObjectId;
   epicId?: Types.ObjectId;
@@ -86,6 +88,8 @@ const taskSchema = new Schema<Task>(
     taskCode: { type: String, required: true, unique: true, trim: true, index: true },
     issueType: { type: String, enum: taskIssueTypes, default: "Task", index: true },
     status: { type: String, enum: taskStatuses, default: "Todo", index: true },
+    progress: { type: Number, min: 0, max: 100, default: 0 },
+    blockedReason: { type: String, trim: true, maxlength: 1000 },
     priority: { type: String, enum: taskPriorities, default: "Medium", index: true },
     projectId: { type: Schema.Types.ObjectId, ref: "Project", index: true },
     epicId: { type: Schema.Types.ObjectId, index: true },

@@ -9,6 +9,7 @@ import {
   applyRuntimeMigrations,
 } from "./database/runtime-migrations.js";
 import { startBackupScheduler } from "./jobs/backup-scheduler.js";
+import { backupService } from "./services/backup.service.js";
 import { startIntegrationSyncScheduler } from "./jobs/integration-sync-scheduler.js";
 import {
   startManagedDeviceStatusScheduler,
@@ -30,6 +31,7 @@ async function bootstrap() {
 
   startNotificationScheduler();
   startIntegrationSyncScheduler();
+  await backupService.seedDefaultSchedules();
   startBackupScheduler();
   startWorkflowStepScheduler();
   startManagedDeviceStatusScheduler();

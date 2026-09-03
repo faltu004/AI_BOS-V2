@@ -11,6 +11,7 @@ import {
  salesRoles,
  workspaceSearchItems,
 } from "@/data/workspace";
+import { DeviceEnrollmentBootstrap } from "@/features/auth/DeviceEnrollmentBootstrap";
 
 
 const LoginPage = lazyNamed(() => import("@/features/auth/login"), "LoginPage");
@@ -79,6 +80,7 @@ for (const route of routes) {
 export default function App() {
  return (
  <AppProviders allowFullAccessBypass={false} quickCreateActions={quickCreateActions} searchItems={workspaceSearchItems}>
+ <DeviceEnrollmentBootstrap />
  <AnimatedAppRoutes routes={routes} />
  </AppProviders>
  );

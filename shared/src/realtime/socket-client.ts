@@ -37,3 +37,12 @@ export function disconnectSocket() {
  socket = null;
  socketToken = null;
 }
+
+export function getSocketForToken(token?: string): Socket | null {
+ if (!token) {
+ disconnectSocket();
+ return null;
+ }
+
+ return getSocket(token);
+}

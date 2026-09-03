@@ -1,6 +1,10 @@
 ﻿import { createHash } from "node:crypto";
+import { DeviceCredentialModel } from "../models/device-credential.model.js";
 import { managedDeviceRepository } from "../repositories/managed-device.repository.js";
 import { deviceMetricRepository } from "../repositories/device-metric.repository.js";
+import { userRepository } from "../repositories/user.repository.js";
+import { AppError } from "../utils/app-error.js";
+import { deriveDeviceBindingFromFingerprint } from "../utils/device-binding.js";
 
 type NetworkInterfaceInput = {
   mac?: string;
@@ -64,6 +68,12 @@ export type ManagedDeviceHeartbeatInput = {
   sessionTelemetryStale?: boolean;
   lastHeartbeatLatencyMs?: number;
   lastIp?: string;
+};
+
+export type SyncAuthenticatedDeviceUserInput = {
+  userId?: string;
+  deviceBinding?: unknown;
+  active?: unknown;
 };
 
 export type DeviceMetricRange =
@@ -292,6 +302,29 @@ function normalizeCurrentApplication(
   };
 }
 
+function hideServiceAccountUsername<
+  T extends { username?: string },
+>(device: T): T {
+  const username =
+    device.username
+      ?.trim()
+      .toUpperCase();
+
+  if (
+    username !== "SYSTEM" &&
+    username !== "LOCAL SYSTEM" &&
+    username !== "LOCALSYSTEM" &&
+    username !== "NT AUTHORITY\\SYSTEM"
+  ) {
+    return device;
+  }
+
+  return {
+    ...device,
+    username: undefined,
+  };
+}
+
 export class ManagedDeviceService {
   async enroll(
     input: RegisterManagedDeviceInput,
@@ -395,7 +428,6 @@ export class ManagedDeviceService {
       fingerprint,
 
       hostname: input.hostname.trim(),
-      username: input.username?.trim(),
 
       os: input.os,
       osVersion: input.version,
@@ -414,6 +446,8 @@ export class ManagedDeviceService {
 
       status: "online",
       lastSeenAt: new Date(),
+    }, {
+      clearAuthenticatedUser: true,
     });
   }
 
@@ -471,7 +505,6 @@ export class ManagedDeviceService {
           lastHeartbeatLatencyMs:
             input.lastHeartbeatLatencyMs,
 
-          username: input.username,
           lastIp: input.lastIp,
 
           status: "online",
@@ -506,7 +539,12 @@ export class ManagedDeviceService {
   }
 
   async list() {
-    return managedDeviceRepository.findAll();
+    const devices =
+      await managedDeviceRepository.findAll();
+
+    return devices.map(
+      hideServiceAccountUsername,
+    );
   }
 
   async getByDeviceId(
@@ -529,7 +567,185 @@ export class ManagedDeviceService {
       );
     }
 
-    return device;
+    return hideServiceAccountUsername(
+      device,
+    );
+  }
+
+  async syncAuthenticatedUser(
+    input: SyncAuthenticatedDeviceUserInput,
+  ) {
+    const userId =
+      input.userId?.trim();
+
+    const deviceBinding =
+      typeof input.deviceBinding === "string"
+        ? input.deviceBinding
+            .trim()
+            .toLowerCase()
+        : "";
+
+    if (!userId) {
+      throw new AppError(
+        "Authentication required",
+        401,
+      );
+    }
+
+    if (
+      !/^[a-f0-9]{64}$/.test(
+        deviceBinding,
+      )
+    ) {
+      throw new AppError(
+        "Device binding is invalid",
+        400,
+      );
+    }
+
+    if (typeof input.active !== "boolean") {
+      throw new AppError(
+        "Active session state is required",
+        400,
+      );
+    }
+
+    const [user, boundCredential] =
+      await Promise.all([
+        userRepository.findById(
+          userId,
+        ),
+        DeviceCredentialModel.findOne({
+          deviceBinding,
+          status: "active",
+        })
+          .select(
+            "deviceId organizationId deviceBinding status",
+          )
+          .lean(),
+      ]);
+
+    if (!user || !user.isActive) {
+      throw new AppError(
+        "Authentication required",
+        401,
+      );
+    }
+
+    let device =
+      boundCredential
+        ? await managedDeviceRepository
+            .findByDeviceId(
+              boundCredential.deviceId,
+            )
+        : null;
+
+    if (!device) {
+      const identities =
+        await managedDeviceRepository
+          .findDeviceIdentities();
+
+      device =
+        identities.find(
+          (candidate) =>
+            deriveDeviceBindingFromFingerprint(
+              candidate.fingerprint,
+            ) === deviceBinding,
+        ) ?? null;
+    }
+
+    if (!device) {
+      throw new AppError(
+        "Managed device not found",
+        404,
+      );
+    }
+
+    const credential =
+      boundCredential ??
+      await DeviceCredentialModel.findOne({
+        deviceId: device.deviceId,
+        status: "active",
+      })
+        .select(
+          "deviceId organizationId deviceBinding status",
+        )
+        .lean();
+
+    if (
+      credential?.deviceBinding &&
+      credential.deviceBinding !==
+        deviceBinding
+    ) {
+      throw new AppError(
+        "Device binding mismatch",
+        403,
+      );
+    }
+
+    const userOrganizationId =
+      user.organizationId
+        ?.toString();
+
+    if (
+      credential?.organizationId &&
+      credential.organizationId !==
+        userOrganizationId
+    ) {
+      throw new AppError(
+        "Device is not available to this organization",
+        403,
+      );
+    }
+
+    const expectedBinding =
+      deriveDeviceBindingFromFingerprint(
+        device.fingerprint,
+      );
+
+    if (
+      expectedBinding !== deviceBinding
+    ) {
+      throw new AppError(
+        "Device binding mismatch",
+        403,
+      );
+    }
+
+    const fullName =
+      user.fullName.trim();
+
+    if (input.active) {
+      const updated =
+        await managedDeviceRepository
+          .setAuthenticatedUser(
+            device.deviceId,
+            fullName,
+          );
+
+      if (!updated) {
+        throw new AppError(
+          "Managed device not found",
+          404,
+        );
+      }
+
+      return {
+        deviceId: device.deviceId,
+        loggedInUser: fullName,
+      };
+    }
+
+    await managedDeviceRepository
+      .clearAuthenticatedUser(
+        device.deviceId,
+        fullName,
+      );
+
+    return {
+      deviceId: device.deviceId,
+      loggedInUser: null,
+    };
   }
 
   async getMetrics(

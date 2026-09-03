@@ -40,6 +40,19 @@ export function resolveRoomAccess(user: UserDocument, room: CollaborationRoomDoc
   }
 }
 
+export function filterAuthorizedMentionIds(
+  room: CollaborationRoomDocument,
+  users: Array<Pick<UserDocument, "_id" | "teamIds">>,
+  mentionedUserIds: Types.ObjectId[],
+): Types.ObjectId[] {
+  const mentioned = new Set(mentionedUserIds.map((id) => id.toString()));
+
+  return users
+    .filter((user) => mentioned.has(user._id.toString()) && resolveRoomAccess(user as UserDocument, room))
+    .map((user) => mentionedUserIds.find((id) => id.toString() === user._id.toString()))
+    .filter((id): id is Types.ObjectId => Boolean(id));
+}
+
 async function decorateRoom(room: CollaborationRoomDocument | { _id: Types.ObjectId }, userId: Types.ObjectId) {
   const roomId = room._id as Types.ObjectId;
   const [readState, latestMessage] = await Promise.all([
@@ -214,6 +227,24 @@ export class CollaborationRoomService {
     }
 
     return room;
+  }
+
+  async filterAuthorizedMentionUserIds(
+    room: CollaborationRoomDocument,
+    mentionedUserIds: Types.ObjectId[],
+  ): Promise<Types.ObjectId[]> {
+    if (mentionedUserIds.length === 0) return [];
+
+    const users = await userRepository.findActiveByIdsInOrganization(
+      mentionedUserIds.map((id) => id.toString()),
+      room.organizationId.toString(),
+    );
+
+    return filterAuthorizedMentionIds(
+      room,
+      users as Array<Pick<UserDocument, "_id" | "teamIds">>,
+      mentionedUserIds,
+    );
   }
 }
 

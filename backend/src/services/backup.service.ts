@@ -72,6 +72,33 @@ export class BackupService {
     return backupScheduleRepository.listAll();
   }
 
+  async seedDefaultSchedules() {
+    await backupScheduleRepository.seedDefaults();
+  }
+
+  async pruneExpiredBackups() {
+    const schedules = await backupScheduleRepository.listAll();
+    const now = Date.now();
+    let prunedCount = 0;
+
+    for (const schedule of schedules) {
+      const cutoff = new Date(now - schedule.retentionDays * 24 * 60 * 60 * 1000);
+      const expired = await backupRecordRepository.findExpiredCompleted(schedule.type, cutoff);
+
+      for (const record of expired) {
+        if (record.filePath) {
+          await localBackupStorage.remove(record.filePath).catch((error) => {
+            logger.error(error, `Failed to delete backup file for expired record ${record._id.toString()}`);
+          });
+        }
+        await backupRecordRepository.deleteById(record._id.toString());
+        prunedCount += 1;
+      }
+    }
+
+    return prunedCount;
+  }
+
   async updateSchedule(type: BackupType, input: { frequency?: BackupFrequency; isEnabled?: boolean; retentionDays?: number }) {
     return backupScheduleRepository.upsert(type, { ...input, nextRunAt: new Date() });
   }
@@ -89,6 +116,12 @@ export class BackupService {
       } finally {
         await backupScheduleRepository.advance(schedule.type, addFrequency(now, schedule.frequency), now);
       }
+    }
+
+    try {
+      await this.pruneExpiredBackups();
+    } catch (error) {
+      logger.error(error, "Backup retention pruning failed");
     }
 
     return ran;

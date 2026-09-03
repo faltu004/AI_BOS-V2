@@ -7,6 +7,7 @@ $ErrorActionPreference = "Stop"
 
 $logRoot = Join-Path $env:ProgramData "AI BOS\InstallLogs"
 $agentDataRoot = Join-Path $env:ProgramData "AI BOS\DeviceAgent"
+$handoffPublicRoot = Join-Path $env:ProgramData "AI BOS\DeviceHandoff"
 $bootstrapEnrollmentPath = Join-Path $agentDataRoot ".bootstrap-enrollment.env"
 $logPath = Join-Path $logRoot "employee-device-services-install.log"
 $credentialMigrationScript = Join-Path $PSScriptRoot "device-credential-migration.ps1"
@@ -162,6 +163,19 @@ function Protect-AgentData {
     Write-InstallLog "DeviceAgent ACL verified: inheritance disabled; SYSTEM and Administrators have FullControl; broad user read access absent."
 }
 
+function Protect-EnrollmentHandoffPublicRoot {
+    New-Item -ItemType Directory -Force -Path $handoffPublicRoot | Out-Null
+    Invoke-IcaclsChecked -Arguments @(
+        $handoffPublicRoot,
+        "/inheritance:r",
+        "/grant:r",
+        "*S-1-5-18:(OI)(CI)F",
+        "*S-1-5-32-544:(OI)(CI)F",
+        "*S-1-5-32-545:(OI)(CI)RX"
+    ) -Description "Apply read-only enrollment handoff public-key ACL"
+    Write-InstallLog "Enrollment handoff public-key directory ACL applied: users read-only; SYSTEM and Administrators FullControl."
+}
+
 function Install-WinSwService {
     param(
         [Parameter(Mandatory = $true)]
@@ -231,6 +245,7 @@ try {
     }
 
     Protect-AgentData
+    Protect-EnrollmentHandoffPublicRoot
     Invoke-AiBosLegacyCredentialMigration `
         -LegacyEnvPath "C:\AI-BOS\DeviceAgent\agent\.env" `
         -AgentDataRoot $agentDataRoot `

@@ -9,6 +9,7 @@ import { fingerprintDevice } from "../utils/device.js";
 import { securityService, isValidObjectId } from "./security.service.js";
 import { passwordService } from "./password.service.js";
 import { faceEnrollmentService } from "./face-enrollment.service.js";
+import { permissionService } from "./permission.service.js";
 import { env } from "../config/env.js";
 import type {
   ChangePasswordInput,
@@ -17,7 +18,10 @@ import type {
 } from "../validation/auth.validation.js";
 
 async function toAuthUser(user: UserDocument): Promise<PublicUser> {
-  const hasActiveFaceEnrollment = await faceEnrollmentService.hasActiveEnrollment(user.id);
+  const [hasActiveFaceEnrollment, effectivePermissions] = await Promise.all([
+    faceEnrollmentService.hasActiveEnrollment(user.id),
+    permissionService.resolveEffectivePermissions(user.role),
+  ]);
   return {
     id: user.id,
     fullName: user.fullName,
@@ -30,6 +34,7 @@ async function toAuthUser(user: UserDocument): Promise<PublicUser> {
     isProfileComplete: user.isProfileComplete,
     mustChangePassword: user.mustChangePassword,
     hasActiveFaceEnrollment,
+    permissions: Array.from(effectivePermissions.permissionKeys),
     lastLoginAt: user.lastLoginAt,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
@@ -90,6 +95,35 @@ export class AuthService {
         metadata: { reason: "invalid_password" },
       });
       throw new AppError("Invalid email or password", 401);
+    }
+
+    if (
+      user.mustChangePassword &&
+      user.temporaryPasswordExpiresAt &&
+      user.temporaryPasswordExpiresAt.getTime() <= Date.now()
+    ) {
+      await securityService.recordLoginHistory({
+        userId: user.id,
+        eventType: "login_failure",
+        ip: meta?.ip,
+        userAgent: meta?.userAgent,
+        deviceId: meta?.deviceId,
+        failureReason: "temporary_password_expired",
+      });
+      await securityService.recordSecurityEvent({
+        userId: user.id,
+        eventType: "login_failure",
+        severity: "low",
+        ip: meta?.ip,
+        userAgent: meta?.userAgent,
+        deviceId: meta?.deviceId,
+        description: "Expired temporary credential rejected",
+        metadata: { reason: "temporary_password_expired" },
+      });
+      throw new AppError(
+        "Temporary password has expired. Request a new temporary password.",
+        401,
+      );
     }
 
     const updatedUser = await userRepository.updateLastLogin(user.id);

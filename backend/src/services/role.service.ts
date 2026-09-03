@@ -16,14 +16,18 @@ export class RoleService {
       throw new AppError("A role with this name already exists", 409);
     }
 
-    let permissionKeys = input.permissionKeys;
+    let permissionKeys = input.permissionKeys ?? [];
     if (input.templateId) {
       const template = await roleTemplateRepository.findById(input.templateId);
       if (!template) {
         throw new AppError("Role template not found", 404);
       }
-      permissionKeys = [...new Set([...template.permissionKeys, ...input.permissionKeys])];
+      if (input.permissionKeys === undefined) {
+        permissionKeys = template.permissionKeys;
+      }
     }
+
+    permissionKeys = [...new Set(permissionKeys)];
 
     const role = await roleRepository.create({
       slug,

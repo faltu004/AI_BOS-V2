@@ -1,4 +1,5 @@
 ﻿import type { RequestHandler } from "express";
+import { organizationSettingsRepository } from "../repositories/organization-settings.repository.js";
 import { permissionService } from "../services/permission.service.js";
 import { AppError } from "../utils/app-error.js";
 import type {
@@ -30,6 +31,41 @@ export function requirePermission(...keys: string[]): RequestHandler {
  * actions the Owner specifically needs power over â€” e.g. disabling the Administrator's
  * own Admin Panel access.
  */
+const mutatingHttpMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+/**
+ * Owner's global write-lock on Administrator accounts (see AdminDashboardPage.tsx's
+ * "Master Control Switch"). Applied automatically to every route built with `route()`
+ * (see async-handler.ts) — `/auth/*` is exempt so a read-only Administrator can still
+ * log out, refresh their session, or change their own password.
+ */
+export const enforceMasterControlSwitch: RequestHandler = async (req, _res, next) => {
+  if (!mutatingHttpMethods.has(req.method)) {
+    return next();
+  }
+
+  if (!req.user || req.user.role !== "Administrator") {
+    return next();
+  }
+
+  if (req.originalUrl.includes("/auth/")) {
+    return next();
+  }
+
+  const settings = await organizationSettingsRepository.findGlobal();
+
+  if (settings?.moduleAccess?.administratorControlMode === "read_only") {
+    return next(
+      new AppError(
+        "The Owner has set the system to Read-Only mode. Contact the Owner to enable write access.",
+        403,
+      ),
+    );
+  }
+
+  return next();
+};
+
 export function requireRole(...roles: string[]): RequestHandler {
   return (req, _res, next) => {
     if (!req.user) {
