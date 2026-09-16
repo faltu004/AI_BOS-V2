@@ -78,39 +78,63 @@ export function AdministratorMonitoringAccessProvider({
 
   const refresh =
     useCallback(
-      async () => {
+      async (background = false) => {
         const current =
           getStoredAuthSession();
 
+        if (!current) {
+          setAccess(
+            deniedAccess,
+          );
+
+          if (!background) {
+            setLoading(
+              false,
+            );
+          }
+
+          return;
+        }
+
         if (
-          current?.user.role ===
+          current.user.role ===
           "Owner"
         ) {
           setAccess(
             ownerAccess,
           );
-          setLoading(
-            false,
-          );
+
+          if (!background) {
+            setLoading(
+              false,
+            );
+          }
+
           return;
         }
 
         if (
-          current?.user.role !==
+          current.user.role !==
           "Administrator"
         ) {
           setAccess(
             deniedAccess,
           );
-          setLoading(
-            false,
-          );
+
+          if (!background) {
+            setLoading(
+              false,
+            );
+          }
+
           return;
         }
 
-        setLoading(
-          true,
-        );
+        if (!background) {
+          setLoading(
+            true,
+          );
+        }
 
         try {
           setAccess(
@@ -121,9 +145,11 @@ export function AdministratorMonitoringAccessProvider({
             deniedAccess,
           );
         } finally {
-          setLoading(
-            false,
-          );
+          if (!background) {
+            setLoading(
+              false,
+            );
+          }
         }
       },
       [],
@@ -133,23 +159,29 @@ export function AdministratorMonitoringAccessProvider({
     () => {
       void refresh();
 
-      const refreshAccess =
+      const backgroundRefresh =
+        () => {
+          void refresh(true);
+        };
+
+      const authRefresh =
         () => {
           void refresh();
         };
 
       window.addEventListener(
         "focus",
-        refreshAccess,
+        backgroundRefresh,
       );
+
       window.addEventListener(
         authSessionChangedEvent,
-        refreshAccess,
+        authRefresh,
       );
 
       const timer =
         window.setInterval(
-          refreshAccess,
+          backgroundRefresh,
           15_000,
         );
 
@@ -157,13 +189,15 @@ export function AdministratorMonitoringAccessProvider({
         window.clearInterval(
           timer,
         );
+
         window.removeEventListener(
           "focus",
-          refreshAccess,
+          backgroundRefresh,
         );
+
         window.removeEventListener(
           authSessionChangedEvent,
-          refreshAccess,
+          authRefresh,
         );
       };
     },

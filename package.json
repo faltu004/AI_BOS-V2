@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "description": "AI BOS Business Operating System",
-  "author": "WorknAI Technology Pvt Ltd",
+  "author": "WorknAi Technologies India Pvt Ltd",
   "type": "module",
   "workspaces": [
     "frontend",

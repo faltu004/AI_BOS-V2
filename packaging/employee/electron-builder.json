@@ -1,7 +1,7 @@
 ﻿{
     "appId":  "com.aibos.employee",
     "productName":  "AI BOS Employee",
-    "copyright":  "Copyright © WorknAI Technology Pvt Ltd",
+    "copyright":  "Copyright © WorknAi Technologies India Pvt Ltd",
     "artifactName":  "AI-BOS-Employee-Setup-${version}.${ext}",
     "directories":  {
                         "output":  "dist/employee-installer"

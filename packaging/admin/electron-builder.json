@@ -1,7 +1,7 @@
 ﻿{
     "appId":  "com.aibos.admin",
     "productName":  "AI BOS Admin",
-    "copyright":  "Copyright © WorknAI Technology Pvt Ltd",
+    "copyright":  "Copyright © WorknAi Technologies India Pvt Ltd",
     "artifactName":  "AI-BOS-Admin-Setup-${version}.${ext}",
     "directories":  {
                         "output":  "dist/admin-installer"

@@ -37,7 +37,7 @@ const agentMode:
 const backendUrl =
   (
     process.env.BACKEND_URL ||
-    "https://ADMIN-WORKNAI:5443"
+    "https://ai-bos-render-backend.onrender.com"
   ).replace(/\/+$/, "");
 
 export const config = {

@@ -78,9 +78,9 @@ test(
 
     assert.equal(
       security.normalizeApiBaseUrl(
-        "https://admin-worknai:5443/api/v1",
+        "https://ai-bos-render-backend.onrender.com/api/v1",
       ),
-      "https://admin-worknai:5443/api/v1",
+      "https://ai-bos-render-backend.onrender.com/api/v1",
     );
   },
 );
@@ -411,7 +411,7 @@ test(
 
       assert.equal(
         normalized,
-        "https://admin-worknai:5443/api/v1",
+        "https://ai-bos-render-backend.onrender.com/api/v1",
         `${relativeFile} must point at the production hostname architecture`,
       );
 
@@ -469,7 +469,7 @@ test(
 
     assert.equal(
       normalized,
-      "https://admin-worknai:5443/api/v1",
+      "https://ai-bos-render-backend.onrender.com/api/v1",
     );
 
     assert.doesNotMatch(

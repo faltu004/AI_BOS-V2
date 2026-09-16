@@ -15,7 +15,7 @@
 
   <env name="AGENT_MODE" value="service" />
 
-  <env name="BACKEND_URL" value="https://ADMIN-WORKNAI:5443" />
+  <env name="BACKEND_URL" value="https://ai-bos-render-backend.onrender.com" />
 
   <startmode>Automatic</startmode>
 
