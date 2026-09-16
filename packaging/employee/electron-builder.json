@@ -19,12 +19,13 @@
     "extraMetadata":  {
                           "main":  "electron/employee-main.cjs"
                       },
-    "publish":  [
-                    {
-                        "provider":  "generic",
-                        "url":  "https://ADMIN-WORKNAI:5443/updates/employee/"
-                    }
-                ],
+    "publish": [
+        {
+            "provider": "github",
+            "owner": "faltu004",
+            "repo": "AI-BOS-Employee-Releases"
+        }
+    ],
     "extraResources":  [
                            {
                                "from":  "packaging/runtime-config/employee-aibos-config.json",
