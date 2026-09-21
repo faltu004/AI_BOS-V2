@@ -1,5 +1,5 @@
 param(
-    [string]$ApiBaseUrl = "https://ai-bos-render-backend.onrender.com/api/v1",
+    [string]$ApiBaseUrl = "https://bos.worknai.in/api/v1",
     [Parameter(Mandatory = $true)]
     [string]$AccessTokenFile,
     [Parameter(Mandatory = $true)]
