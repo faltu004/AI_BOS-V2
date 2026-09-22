@@ -26,6 +26,21 @@ const {
 
 registerAppSchemePrivileges(protocol);
 
+// The Employee renderer keeps its own persistent storage partition. The Admin
+// desktop app serves the same custom origin (aibos://app), so sharing the
+// default session would let an Admin login overwrite or clear the Employee
+// remembered email (ai_bos_remembered_email) stored in localStorage.
+const EMPLOYEE_PARTITION = "persist:employee";
+let employeeSession = null;
+// session.fromPartition() throws before the app is ready, so the Employee
+// storage session is created lazily on first use from inside app.whenReady().
+function getEmployeeSession() {
+  if (!employeeSession) {
+    employeeSession = session.fromPartition(EMPLOYEE_PARTITION);
+  }
+  return employeeSession;
+}
+
 let mainWindow;
 let runtimeConfig = Object.freeze({});
 let enrollmentInFlight = null;
@@ -377,7 +392,7 @@ function configureMediaPermissions() {
   const trustedOrigin =
     APP_ORIGIN;
 
-  session.defaultSession.setPermissionRequestHandler(
+  getEmployeeSession().setPermissionRequestHandler(
     (webContents, permission, callback) => {
       const url =
         webContents.getURL();
@@ -390,7 +405,7 @@ function configureMediaPermissions() {
     },
   );
 
-  session.defaultSession.setPermissionCheckHandler(
+  getEmployeeSession().setPermissionCheckHandler(
     (webContents, permission, requestingOrigin) => {
       const url =
         webContents?.getURL?.() ?? "";
@@ -521,7 +536,8 @@ function createWindow() {
       ),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true
+      sandbox: true,
+      partition: EMPLOYEE_PARTITION
     }
   });
 
@@ -604,6 +620,10 @@ app.whenReady().then(() => {
   }
 
   try {
+    // The app is ready here, so initialize the Employee storage session
+    // before any protocol, permission, or window setup uses it.
+    getEmployeeSession();
+
     if (app.isPackaged) {
       runtimeConfig = readRuntimeConfig({
         resourcesPath:
@@ -617,7 +637,7 @@ app.whenReady().then(() => {
       );
 
       registerRendererProtocol({
-        protocol,
+        protocol: getEmployeeSession().protocol,
         net,
         rendererRoot,
       });
