@@ -77,6 +77,7 @@ import {
  type OrgHierarchyDepartmentNode,
  type OrgHierarchyReportingNode,
  type OrgHierarchyResponse,
+ type OrgHierarchyUser,
  type OrganizationForm,
  type OrganizationSettingsForm,
  organizationSchema,
@@ -177,6 +178,13 @@ function DepartmentTreeNode({ node }: { node: OrgHierarchyDepartmentNode }) {
  );
 }
 
+function flattenReportingTree(nodes: OrgHierarchyReportingNode[]): OrgHierarchyUser[] {
+ return nodes.flatMap((node) => [
+ { id: node.id, fullName: node.fullName, email: node.email, role: node.role },
+ ...flattenReportingTree(node.directReports),
+ ]);
+}
+
 function ReportingTreeNode({ node }: { node: OrgHierarchyReportingNode }) {
  return (
  <div className="rounded-lg border bg-background p-4">
@@ -216,6 +224,7 @@ export function OrganizationPage() {
  const [holidays, setHolidays] = useState<Holiday[]>([]);
  const [policies, setPolicies] = useState<CompanyPolicy[]>([]);
  const [hierarchy, setHierarchy] = useState<OrgHierarchyResponse | null>(null);
+ const employeeOptions = useMemo(() => (hierarchy ? flattenReportingTree(hierarchy.reportingTree) : []), [hierarchy]);
  const officeMapUrl = buildOfficeMapUrl(
  settings.workspacePreferences.officeLocation.latitude,
  settings.workspacePreferences.officeLocation.longitude,
@@ -704,11 +713,27 @@ export function OrganizationPage() {
  <Input id="deptCode" value={departmentForm.code} onChange={(event) => setDepartmentForm((c) => ({ ...c, code: event.target.value.toUpperCase() }))} />
  </div>
  <div className="space-y-2 sm:col-span-2">
+ <Label htmlFor="deptHead">Department Head</Label>
+ <select
+ className={selectClassName}
+ id="deptHead"
+ value={departmentForm.headId}
+ onChange={(event) => setDepartmentForm((c) => ({ ...c, headId: event.target.value }))}
+ >
+ <option value="">Select department head</option>
+ {employeeOptions.map((employee) => (
+ <option key={employee.id} value={employee.id}>
+ {employee.fullName} ({employee.role})
+ </option>
+ ))}
+ </select>
+ </div>
+ <div className="space-y-2 sm:col-span-2">
  <Label htmlFor="deptDescription">Description</Label>
  <Input id="deptDescription" value={departmentForm.description} onChange={(event) => setDepartmentForm((c) => ({ ...c, description: event.target.value }))} />
  </div>
  </div>
- <Button className="mt-4" disabled={!departmentForm.name} onClick={submitDepartment} type="button">
+ <Button className="mt-4" disabled={!departmentForm.name || !departmentForm.headId} onClick={submitDepartment} type="button">
  Create Department
  </Button>
  </SectionCard>

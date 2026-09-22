@@ -144,6 +144,7 @@ export type DepartmentFormInput = {
  name: string;
  code: string;
  description: string;
+ headId: string;
  status: (typeof activeStatuses)[number];
 };
 
@@ -151,6 +152,7 @@ export const emptyDepartmentForm: DepartmentFormInput = {
  name: "",
  code: "",
  description: "",
+ headId: "",
  status: "Active",
 };
 
