@@ -6,6 +6,7 @@ import {
  FileText,
  MapPin,
  Network,
+ Pencil,
  Plus,
  Save,
  Settings as SettingsIcon,
@@ -23,6 +24,7 @@ import { ThemeToggle } from "@shared/ui/ThemeToggle";
 import { Button } from "@shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@shared/ui/card";
 import { useConfirm } from "@shared/ui/confirm-dialog-context";
+import { Dialog } from "@shared/ui/dialog";
 import { EmptyState } from "@shared/ui/empty-state";
 import { Input } from "@shared/ui/input";
 import { Label } from "@shared/ui/label";
@@ -51,8 +53,10 @@ import {
  publishPolicy,
  saveOrganization,
  saveOrganizationSettings,
+ updateDepartment,
 } from "./organization.api";
 import {
+ activeStatuses,
  branchTypes,
  businessTypes,
  dateFormats,
@@ -232,6 +236,9 @@ export function OrganizationPage() {
 
  const [departmentForm, setDepartmentForm] = useState<DepartmentFormInput>(emptyDepartmentForm);
  const [showDepartmentForm, setShowDepartmentForm] = useState(false);
+ const [editingDepartment, setEditingDepartment] = useState<Department | null>(null);
+ const [departmentEditForm, setDepartmentEditForm] = useState<DepartmentFormInput>(emptyDepartmentForm);
+ const [savingDepartmentEdit, setSavingDepartmentEdit] = useState(false);
  const [branchForm, setBranchForm] = useState<BranchFormInput>(emptyBranchForm);
  const [showBranchForm, setShowBranchForm] = useState(false);
  const [teamForm, setTeamForm] = useState<TeamFormInput>(emptyTeamForm);
@@ -393,6 +400,36 @@ export function OrganizationPage() {
  toast({ title: "Department deleted", type: "success" });
  } catch (error) {
  toast({ title: "Failed to delete department", description: (error as Error).message, type: "error" });
+ }
+ };
+
+ const openEditDepartment = (department: Department) => {
+ setEditingDepartment(department);
+ setDepartmentEditForm({
+ name: department.name,
+ code: department.code ?? "",
+ description: department.description ?? "",
+ headId: department.headId ?? "",
+ status: department.status,
+ });
+ };
+
+ const closeEditDepartment = () => {
+ setEditingDepartment(null);
+ };
+
+ const saveDepartmentEdit = async () => {
+ if (!editingDepartment) return;
+ setSavingDepartmentEdit(true);
+ try {
+ const updated = await updateDepartment(editingDepartment._id, departmentEditForm, token);
+ setDepartments((current) => current.map((item) => (item._id === updated._id ? updated : item)));
+ setEditingDepartment(null);
+ toast({ title: "Department updated", type: "success" });
+ } catch (error) {
+ toast({ title: "Failed to update department", description: (error as Error).message, type: "error" });
+ } finally {
+ setSavingDepartmentEdit(false);
  }
  };
 
@@ -750,13 +787,87 @@ export function OrganizationPage() {
  {department.code && <p className="text-xs text-muted-foreground">{department.code}</p>}
  {department.description && <p className="mt-2 text-sm text-muted-foreground">{department.description}</p>}
  </div>
+ <div className="flex shrink-0 gap-2">
+ <Button onClick={() => openEditDepartment(department)} size="icon" type="button" variant="outline">
+ <Pencil className="h-4 w-4" />
+ </Button>
  <Button onClick={() => void removeDepartment(department)} size="icon" type="button" variant="outline">
  <Trash2 className="h-4 w-4" />
  </Button>
+ </div>
  </CardContent>
  </Card>
  ))}
  </div>
+ )}
+ {editingDepartment && (
+ <Dialog
+ as="form"
+ className="max-w-lg"
+ onClose={closeEditDepartment}
+ onSubmit={(event) => {
+ event.preventDefault();
+ void saveDepartmentEdit();
+ }}
+ >
+ <div className="mb-4">
+ <h2 className="text-xl font-bold">Edit Department</h2>
+ <p className="mt-1 text-sm text-muted-foreground">Update {editingDepartment.name}&apos;s details.</p>
+ </div>
+ <div className="grid gap-4 sm:grid-cols-2">
+ <div className="space-y-2">
+ <Label htmlFor="deptEditName">Name</Label>
+ <Input id="deptEditName" value={departmentEditForm.name} onChange={(event) => setDepartmentEditForm((c) => ({ ...c, name: event.target.value }))} />
+ </div>
+ <div className="space-y-2">
+ <Label htmlFor="deptEditCode">Code</Label>
+ <Input id="deptEditCode" value={departmentEditForm.code} onChange={(event) => setDepartmentEditForm((c) => ({ ...c, code: event.target.value.toUpperCase() }))} />
+ </div>
+ <div className="space-y-2 sm:col-span-2">
+ <Label htmlFor="deptEditHead">Department Head</Label>
+ <select
+ className={selectClassName}
+ id="deptEditHead"
+ value={departmentEditForm.headId}
+ onChange={(event) => setDepartmentEditForm((c) => ({ ...c, headId: event.target.value }))}
+ >
+ <option value="">Select department head</option>
+ {employeeOptions.map((employee) => (
+ <option key={employee.id} value={employee.id}>
+ {employee.fullName} ({employee.role})
+ </option>
+ ))}
+ </select>
+ </div>
+ <div className="space-y-2 sm:col-span-2">
+ <Label htmlFor="deptEditDescription">Description</Label>
+ <Input id="deptEditDescription" value={departmentEditForm.description} onChange={(event) => setDepartmentEditForm((c) => ({ ...c, description: event.target.value }))} />
+ </div>
+ <div className="space-y-2 sm:col-span-2">
+ <Label htmlFor="deptEditStatus">Status</Label>
+ <select
+ className={selectClassName}
+ id="deptEditStatus"
+ value={departmentEditForm.status}
+ onChange={(event) => setDepartmentEditForm((c) => ({ ...c, status: event.target.value as DepartmentFormInput["status"] }))}
+ >
+ {activeStatuses.map((status) => (
+ <option key={status} value={status}>
+ {status}
+ </option>
+ ))}
+ </select>
+ </div>
+ </div>
+ <div className="mt-6 flex justify-end gap-3">
+ <Button onClick={closeEditDepartment} type="button" variant="outline">
+ Cancel
+ </Button>
+ <Button disabled={savingDepartmentEdit || !departmentEditForm.name || !departmentEditForm.headId} type="submit">
+ {savingDepartmentEdit ? "Saving..." : "Save Changes"}
+ </Button>
+ </div>
+ </Dialog>
  )}
  </div>
  )}

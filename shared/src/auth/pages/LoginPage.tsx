@@ -4,7 +4,7 @@ import { ArrowRight, TriangleAlert } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
-import { clearAuthSession, login } from "@shared/auth/auth-service";
+import { clearAuthSession, clearRememberedEmail, getRememberedEmail, login, setRememberedEmail } from "@shared/auth/auth-service";
 
 import { AuthFormField } from "@shared/auth/components/AuthFormField";
 import { AuthLayout } from "@shared/auth/components/AuthLayout";
@@ -34,6 +34,7 @@ export function LoginPage({
 }: LoginPageProps) {
  const [loginError, setLoginError] = useState("");
  const navigate = useNavigate();
+ const rememberedEmail = getRememberedEmail();
  const {
  formState: { errors, isSubmitting },
  handleSubmit,
@@ -41,20 +42,28 @@ export function LoginPage({
  } = useForm<LoginFormValues>({
  resolver: zodResolver(loginSchema),
  defaultValues: {
- email: "",
+ email: rememberedEmail ?? "",
  password: "",
- rememberMe: true,
+ rememberMe: rememberedEmail !== null,
  },
  });
 
  const onSubmit: SubmitHandler<LoginFormValues> = async (values) => {
  setLoginError("");
  try {
- const session = await login(values.email, values.password, values.rememberMe);
+ // "Remember me" here only ever controls the email prefill below — it must
+ // never cause the session/tokens to persist in localStorage across an app
+ // restart, so the session-persistence flag is always false.
+ const session = await login(values.email, values.password, false);
  if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(session.user.role)) {
  clearAuthSession();
  setLoginError(`This ${session.user.role} account is not allowed on this login page.`);
  return;
+ }
+ if (values.rememberMe) {
+ setRememberedEmail(values.email);
+ } else {
+ clearRememberedEmail();
  }
  navigate(redirectTo);
  } catch (error) {

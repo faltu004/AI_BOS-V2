@@ -3,6 +3,28 @@ import { decodeJwtPayload, type AuthRole, type JwtReadySession } from "./types";
 
 export const authSessionChangedEvent = "ai_bos_auth_session_changed";
 
+const rememberedEmailStorageKey = "ai_bos_remembered_email";
+
+/**
+ * "Remember me" email-only convenience storage — deliberately separate from
+ * session/token persistence above. Never stores a password, token, refresh
+ * token, or any other auth secret; only ever holds the email string.
+ */
+export function getRememberedEmail(): string | null {
+ if (typeof window === "undefined") return null;
+ return window.localStorage.getItem(rememberedEmailStorageKey);
+}
+
+export function setRememberedEmail(email: string) {
+ if (typeof window === "undefined") return;
+ window.localStorage.setItem(rememberedEmailStorageKey, email);
+}
+
+export function clearRememberedEmail() {
+ if (typeof window === "undefined") return;
+ window.localStorage.removeItem(rememberedEmailStorageKey);
+}
+
 const roleSensitiveStorageKeys = [
  "ai-bos-recent-pages",
  "ai-bos-favorite-pages",

@@ -137,6 +137,7 @@ export type Department = {
  name: string;
  code?: string;
  description?: string;
+ headId?: string;
  status: (typeof activeStatuses)[number];
 };
 
